@@ -1,75 +1,94 @@
 <template>
-  <div class="w-full max-w-md bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-8">
-    <div class="text-center mb-8">
-      <h2 class="text-2xl font-bold text-white mb-2">
-        {{ is2FAStage ? 'Защита аккаунта' : 'Вход в игру' }}
-      </h2>
-      <p class="text-sm text-slate-400">
-        {{ is2FAStage ? 'Введите 6-значный код из Google Authenticator' : 'Авторизуйтесь, чтобы начать бой' }}
-      </p>
+  <div class="w-full max-w-md bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] shadow-[1px_1px_0_0_#000] pt-0 font-mono text-black select-none">
+    
+    <div class="bg-gradient-to-r from-[#000080] to-blue-800 text-white px-2 py-1 flex justify-between items-center font-bold text-sm">
+      <div class="flex items-center space-x-2">
+        <span>⚓</span>
+        <span>{{ is2FAStage ? 'Защита аккаунта' : 'Вход в игру' }}</span>
+      </div>
+      <button
+        @click="$emit('close')" 
+        type="button"
+        class="bg-[#d4d0c8] text-black border border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] w-4 h-4 flex items-center justify-center text-xs font-bold pb-0.5 active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff]
+        shadow-[inset_0_12px_20px_-6px_rgba(255,255,255,0.5),inset_0_-12px_12px_-6px_rgba(0,0,0,0.3)]
+        active:shadow-[inset_0_4px_6px_rgba(0,0,0,0.6)]"
+      >
+        ✕
+      </button>
     </div>
 
-    <form v-if="!is2FAStage" @submit.prevent="handleLogin" class="space-y-5">
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Имя пользователя</label>
-        <input 
-          v-model="loginForm.username"
-          type="text" 
-          required
-          placeholder="Ваш никнейм"
-          class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
-        />
+    <div class="p-4">
+      <div class="mb-6">
+        <p class="text-xs text-black leading-tight">
+          {{ is2FAStage ? 'Введите 6-значный код из Google Authenticator:' : 'Авторизуйтесь, чтобы начать бой:' }}
+        </p>
       </div>
 
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Пароль</label>
-        <input 
-          v-model="loginForm.password"
-          type="password" 
-          required
-          placeholder="••••••••"
-          class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
-        />
-      </div>
+      <form v-if="!is2FAStage" @submit.prevent="handleLogin" class="space-y-5">
+        <div>
+          <label class="block text-xs font-bold mb-1">Имя пользователя:</label>
+          <input 
+            v-model="loginForm.username"
+            type="text" 
+            required
+            placeholder="Ваш никнейм"
+            class="w-full bg-white text-black text-sm px-2 py-1.5 outline-none border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] focus:bg-white"
+          />
+        </div>
 
-      <button 
-        type="submit"
-        class="w-full bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-medium py-3 rounded-lg transition shadow-lg shadow-blue-600/20"
-      >
-        Далее
-      </button>
-    </form>
+        <div>
+          <label class="block text-xs font-bold mb-1">Пароль:</label>
+          <input 
+            v-model="loginForm.password"
+            type="password" 
+            required
+            placeholder="••••••••"
+            class="w-full bg-white text-black text-sm px-2 py-1.5 outline-none border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] focus:bg-white"
+          />
+        </div>
 
-    <form v-else @submit.prevent="handle2FA" class="space-y-6">
-      <div>
-        <label class="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 text-center">Код подтверждения</label>
-        <input 
-          v-model="twoFactorCode"
-          type="text" 
-          maxlength="6"
-          required
-          placeholder="000 000"
-          class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-center text-2xl font-mono tracking-[0.5em] text-blue-400 placeholder-slate-700 focus:outline-none focus:border-blue-500 transition"
-        />
-      </div>
-
-      <div class="flex flex-col space-y-3">
         <button 
           type="submit"
-          class="w-full bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white font-medium py-3 rounded-lg transition shadow-lg shadow-emerald-600/20"
+          class="w-full bg-[#d4d0c8] text-black text-sm font-bold py-2 px-4 border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] shadow-[inset_0_12px_6px_-6px_rgba(255,255,255,0.5),inset_0_-12px_12px_-6px_rgba(0,0,0,0.4)] 
+        active:border-t-[#003c6c] active:border-l-[#003c6c] active:border-b-[#fff] active:border-r-[#fff]
+          active:shadow-[inset_0_4px_6px_rgba(0,0,0,0.6)]"
         >
-          Подтвердить и войти
+          Далее
         </button>
-        
-        <button 
-          @click="is2FAStage = false" 
-          type="button"
-          class="w-full bg-transparent hover:bg-slate-700/50 text-slate-400 font-medium py-2 rounded-lg transition text-sm"
-        >
-          Вернуться назад
-        </button>
-      </div>
-    </form>
+      </form>
+
+      <form v-else @submit.prevent="handle2FA" class="space-y-6">
+        <div>
+          <label class="block text-xs font-bold mb-1 text-center">Код подтверждения:</label>
+          <input 
+            v-model="twoFactorCode"
+            type="text" 
+            maxlength="6"
+            required
+            placeholder="000000"
+            class="w-full bg-white text-black text-xl font-mono tracking-[0.3em] text-center py-2 outline-none border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] focus:bg-white"
+          />
+        </div>
+
+        <div class="flex flex-col space-y-3">
+          <button 
+            type="submit"
+            class="w-full bg-[#d4d0c8] text-black text-sm font-bold py-2 px-4 border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] shadow-[1px_1px_0_0_#000] active:shadow-none"
+          >
+            Подтвердить и войти
+          </button>
+          
+          <button 
+            @click="is2FAStage = false" 
+            type="button"
+            class="w-full bg-[#d4d0c8] text-black text-xs py-1 px-4 border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] shadow-[1px_1px_0_0_#000] active:shadow-none"
+          >
+            Вернуться назад
+          </button>
+        </div>
+      </form>
+    </div>
+
   </div>
 </template>
 

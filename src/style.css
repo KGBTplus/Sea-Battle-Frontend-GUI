@@ -1,1 +1,35 @@
 @import "tailwindcss";
+
+@theme {
+  --font-faero: "FutigerAeroFont", sans-serif;
+  --animate-wave-gradient: wave-animation 4s ease infinite;
+  --animate-shimmer: shimmer-slide 5s infinite;
+}
+
+@keyframes shimmer-slide {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes wave-animation {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@font-face {
+  font-family: 'FutigerAeroFont'; /* Имя, по которому мы будем вызывать шрифт */
+  src: url('./assets/fonts/aero.ttf') format('truetype'); /* Путь к файлу */
+  font-weight: normal;
+  font-style: normal;
+}
