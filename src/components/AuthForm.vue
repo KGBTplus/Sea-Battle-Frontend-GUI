@@ -135,29 +135,6 @@ const loginForm = ref({
 const twoFactorCode = ref('')
 const emit = defineEmits(['login-success'])
 
-const toggleRegisterMode = () => {
-  isRegisterMode.value = !isRegisterMode.value
-  errorMessage.value = ''
-}
-
-// Обработка регистрации
-const handleRegister = async () => {
-  isLoading.value = true
-  errorMessage.value = ''
-
-  try {
-    await apiClient.register(loginForm.value.username, loginForm.value.email, loginForm.value.password)
-    errorMessage.value = 'Регистрация прошла успешно. Войдите в систему.'
-    isRegisterMode.value = false
-    loginForm.value.password = ''
-  } catch (error) {
-    errorMessage.value = error.message || 'Ошибка регистрации'
-    console.error('Register error:', error)
-  } finally {
-    isLoading.value = false
-  }
-}
-
 // Обработка первого этапа (Логин/Пароль)
 const handleLogin = async () => {
   isLoading.value = true
