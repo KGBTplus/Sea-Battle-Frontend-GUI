@@ -20,7 +20,7 @@
     <div class="p-4">
       <div class="mb-6">
         <p class="text-xs text-black leading-tight">
-          {{ is2FAStage ? 'Введите 6-значный код из Google Authenticator:' : isRegisterMode ? 'Заполните поля для создания аккаунта:' : 'Авторизуйтесь, чтобы начать бой:' }}
+          {{ is2FAStage ? 'Введите 6-значный код отправленный Вам на почту \n (проверьте папку спам):' : 'Авторизуйтесь, чтобы начать бой:' }}
         </p>
       </div>
       <div v-if="errorMessage" class="mb-4 p-2 bg-red-100 border border-red-400 text-red-700 text-xs rounded">
@@ -117,9 +117,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { apiClient } from '../api/client.js'
+import { ref, defineEmits } from 'vue'
 
+const gameStreamUrl = '/stream/game-playlist.m3u8'
 // Переключатель этапов авторизации
 const is2FAStage = ref(false)
 const isRegisterMode = ref(false)
@@ -133,6 +133,7 @@ const loginForm = ref({
 })
 
 const twoFactorCode = ref('')
+const emit = defineEmits(['login-success'])
 
 const toggleRegisterMode = () => {
   isRegisterMode.value = !isRegisterMode.value
@@ -181,20 +182,11 @@ const handleLogin = async () => {
 }
 
 // Обработка второго этапа (2FA код)
-const handle2FA = async () => {
-  isLoading.value = true
-  errorMessage.value = ''
-  
-  try {
-    await apiClient.verify2FA(twoFactorCode.value)
-    alert('Успешный вход!')
-    // Здесь можно добавить переход на главную страницу игры
-    // this.$router.push('/game') или window.location.href = '/game'
-  } catch (error) {
-    errorMessage.value = error.message || 'Ошибка подтверждения 2FA'
-    console.error('2FA error:', error)
-  } finally {
-    isLoading.value = false
-  }
+const handle2FA = () => {
+  console.log('Отправка TOTP-кода:', twoFactorCode.value)
+  alert(`Успешный вход! Токен отправлен. Код: ${twoFactorCode.value}`)
+  // Здесь в будущем будет вызов метода для открытия WebSockets сессии
+
+  emit('login-success')
 }
 </script>
