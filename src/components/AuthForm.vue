@@ -20,7 +20,7 @@
     <div class="p-4">
       <div class="mb-6">
         <p class="text-xs text-black leading-tight">
-          {{ is2FAStage ? 'Введите 6-значный код из Google Authenticator:' : 'Авторизуйтесь, чтобы начать бой:' }}
+          {{ is2FAStage ? 'Введите 6-значный код отправленный Вам на почту \n (проверьте папку спам):' : 'Авторизуйтесь, чтобы начать бой:' }}
         </p>
       </div>
 
@@ -93,8 +93,9 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, defineEmits } from 'vue'
 
+const gameStreamUrl = '/stream/game-playlist.m3u8'
 // Переключатель этапов авторизации
 const is2FAStage = ref(false)
 
@@ -104,6 +105,7 @@ const loginForm = ref({
 })
 
 const twoFactorCode = ref('')
+const emit = defineEmits(['login-success'])
 
 // Обработка первого этапа (Логин/Пароль)
 const handleLogin = () => {
@@ -117,5 +119,7 @@ const handle2FA = () => {
   console.log('Отправка TOTP-кода:', twoFactorCode.value)
   alert(`Успешный вход! Токен отправлен. Код: ${twoFactorCode.value}`)
   // Здесь в будущем будет вызов метода для открытия WebSockets сессии
+
+  emit('login-success')
 }
 </script>
