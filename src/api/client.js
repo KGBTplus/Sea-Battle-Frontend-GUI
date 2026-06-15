@@ -1,8 +1,8 @@
 // API Client для общения с бекендом
 const getApiBaseUrl = () => {
   if (import.meta.env.DEV) {
-    // В dev режиме используется proxy через Vite
-    return ''
+    // В dev режиме используем VITE_API_URL если задан, иначе адрес локального бэкенда
+    return import.meta.env.VITE_API_URL || 'http://localhost:8080'
   }
   // В production используется переменная окружения или текущий домен
   return import.meta.env.VITE_API_URL || ''
@@ -13,11 +13,21 @@ const API_BASE_URL = getApiBaseUrl()
 class ApiClient {
   constructor() {
     this.token = localStorage.getItem('auth_token')
+    this.tempToken = sessionStorage.getItem('temp_token')
   }
 
   setToken(token) {
     this.token = token
     localStorage.setItem('auth_token', token)
+  }
+
+  setTempToken(tempToken) {
+    this.tempToken = tempToken
+    if (tempToken) {
+      sessionStorage.setItem('temp_token', tempToken)
+    } else {
+      sessionStorage.removeItem('temp_token')
+    }
   }
 
   getToken() {
@@ -26,6 +36,7 @@ class ApiClient {
 
   clearToken() {
     this.token = null
+    this.tempToken = null
     localStorage.removeItem('auth_token')
   }
 
@@ -67,16 +78,20 @@ class ApiClient {
     if (response.token) {
       this.setToken(response.token)
     }
+    if (response.temp_token) {
+      this.setTempToken(response.temp_token)
+    }
     return response
   }
 
   async verify2FA(code) {
     const response = await this.request('/auth/2fa/authenticate', {
       method: 'POST',
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ temp_token: this.tempToken, code }),
     })
     if (response.token) {
       this.setToken(response.token)
+      this.setTempToken(null)
     }
     return response
   }
