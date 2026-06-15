@@ -117,10 +117,12 @@
 </template>
 
 <script setup>
+import { apiClient } from '../api/client.js'
 import { ref, defineEmits } from 'vue'
 
 const gameStreamUrl = '/stream/game-playlist.m3u8'
-// Переключатель этапов авторизации
+
+// Состояния экрана
 const is2FAStage = ref(false)
 const isRegisterMode = ref(false)
 const isLoading = ref(false)
@@ -133,7 +135,31 @@ const loginForm = ref({
 })
 
 const twoFactorCode = ref('')
-const emit = defineEmits(['login-success'])
+const emit = defineEmits(['login-success', 'close'])
+
+// Переключатель режимов Вход / Регистрация
+const toggleRegisterMode = () => {
+  isRegisterMode.value = !isRegisterMode.value
+  errorMessage.value = ''
+}
+
+// Обработка регистрации
+const handleRegister = async () => {
+  isLoading.value = true
+  errorMessage.value = ''
+  
+  try {
+    await apiClient.register(loginForm.value.username, loginForm.value.email, loginForm.value.password)
+    errorMessage.value = 'Регистрация прошла успешно. Войдите в систему.'
+    isRegisterMode.value = false // Переключаем на форму логина
+    loginForm.value.password = ''
+  } catch (error) {
+    errorMessage.value = error.message || 'Ошибка регистрации'
+    console.error('Register error:', error)
+  } finally {
+    isLoading.value = false
+  }
+}
 
 // Обработка первого этапа (Логин/Пароль)
 const handleLogin = async () => {
@@ -147,8 +173,8 @@ const handleLogin = async () => {
       is2FAStage.value = true
       errorMessage.value = 'Код отправлен на email'
     } else {
-      alert('Вход выполнен без 2FA')
-      // Если нужно, здесь можно выполнить переход в игру или закрыть модал
+      alert('Вход выполнен успешно!')
+      emit('login-success')
     }
   } catch (error) {
     errorMessage.value = error.message || 'Ошибка входа'
@@ -159,11 +185,19 @@ const handleLogin = async () => {
 }
 
 // Обработка второго этапа (2FA код)
-const handle2FA = () => {
-  console.log('Отправка TOTP-кода:', twoFactorCode.value)
-  alert(`Успешный вход! Токен отправлен. Код: ${twoFactorCode.value}`)
-  // Здесь в будущем будет вызов метода для открытия WebSockets сессии
-
-  emit('login-success')
+const handle2FA = async () => {
+  isLoading.value = true
+  errorMessage.value = ''
+  
+  try {
+    await apiClient.verify2FA(twoFactorCode.value)
+    alert('Успешный вход через 2FA!')
+    emit('login-success')
+  } catch (error) {
+    errorMessage.value = error.message || 'Неверный код авторизации'
+    console.error('2FA error:', error)
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>

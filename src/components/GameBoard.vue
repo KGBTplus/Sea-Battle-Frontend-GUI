@@ -220,7 +220,7 @@ const canUserShoot = computed(() => {
 
 // Чтение собственного UUID (sub) из сохраненного JWT токена авторизации
 const parseMyIDFromToken = () => {
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('auth_token')
   if (!token) return
   try {
     const base64Url = token.split('.')[1]
@@ -239,10 +239,22 @@ const parseMyIDFromToken = () => {
  * ИНИЦИАЛИЗАЦИЯ WEBSOCKET СОЕДИНЕНИЯ
  */
 const initWebSocket = () => {
-  const token = localStorage.getItem('token')
-  // Строим ws-протокол динамически на основе текущего хоста бэкенда
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${protocol}//${window.location.host}/api/games/${props.gameId}/ws?token=${token}`
+  const token = localStorage.getItem('auth_token')
+  
+  // 1. Берем базовый HTTP URL из .env (например, http://31.128.40.90:32000)
+  // Если переменная не задана, откатываемся на текущий домен
+  const apiBaseUrl = import.meta.env.VITE_API_URL || window.location.origin
+  
+  // 2. Меняем http/https протокол на ws/wss
+  const wsProtocol = apiBaseUrl.startsWith('https') ? 'wss:' : 'ws:'
+  
+  // 3. Очищаем адрес от протокола 'http://' или 'https://', чтобы оставить только хост и порт
+  const cleanHost = apiBaseUrl.replace(/^https?:\/\//, '')
+  
+  // 4. Собираем финальный рабочий URL для подключения к подом в K8s
+  const wsUrl = `${wsProtocol}//${cleanHost}/api/games/${props.gameId}/ws?token=${token}`
+  
+  console.log("🔗 Попытка подключения к WS:", wsUrl)
   
   socket.value = new WebSocket(wsUrl)
 
