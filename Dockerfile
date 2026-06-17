@@ -1,34 +1,36 @@
-# Build stage
+# === Этап 1: Сборка приложения ===
 FROM node:20-alpine as builder
 
 WORKDIR /app
 
-ARG VITE_API_URL=http://localhost:8080
+# Объявляем аргумент сборки. Если при сборке ничего не передать, 
+# подставится домен по умолчанию.
+ARG VITE_API_URL=http://team4.verstack.ru
 ENV VITE_API_URL=${VITE_API_URL}
 
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
 
-# Copy source code
 COPY . .
-
-# Build the application
 RUN npm run build
 
-# Production stage
-FROM node:20-alpine
+# === Этап 2: Продакшен-сервер Nginx ===
+FROM nginx:stable-alpine
 
-WORKDIR /app
+# Копируем скомпилированную статику из билдера в папку Nginx
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Install a simple HTTP server to serve the dist folder
-RUN npm install -g serve
+# Включаем поддержку SPA роутинга (чтобы при перезагрузке страницы /game не было 404)
+RUN echo 'server { \
+    listen 80; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html index.htm; \
+        try_files $uri $uri/ /index.html; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
 
-# Copy built app from builder
-COPY --from=builder /app/dist ./dist
+# Ingress внутри кластера обычно ожидает от подов 80-й порт
+EXPOSE 80
 
-EXPOSE 5173
-
-CMD ["serve", "-s", "dist", "-l", "5173"]
+CMD ["nginx", "-g", "daemon off;"]
