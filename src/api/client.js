@@ -1,24 +1,19 @@
 // API Client для общения с бекендом
-const getApiBaseUrl = () => {
-  if (import.meta.env.DEV) {
-    // В dev режиме используем VITE_API_URL если задан, иначе адрес локального бэкенда
-    return import.meta.env.VITE_API_URL || 'http://localhost:8080'
-  }
-  // В production используется переменная окружения или текущий домен
-  return import.meta.env.VITE_API_URL || ''
-}
-
-const API_BASE_URL = getApiBaseUrl()
+const API_BASE_URL = import.meta.env.DEV 
+  ? 'http://localhost:8080' 
+  : (import.meta.env.VITE_API_URL || '/api')
 
 class ApiClient {
   constructor() {
-    this.token = localStorage.getItem('auth_token')
+    // ИСПРАВЛЕНО: Ключ изменен на 'token'
+    this.token = localStorage.getItem('token')
     this.tempToken = sessionStorage.getItem('temp_token')
   }
 
   setToken(token) {
     this.token = token
-    localStorage.setItem('auth_token', token)
+    // ИСПРАВЛЕНО: Ключ изменен на 'token'
+    localStorage.setItem('token', token)
   }
 
   setTempToken(tempToken) {
@@ -37,11 +32,14 @@ class ApiClient {
   clearToken() {
     this.token = null
     this.tempToken = null
-    localStorage.removeItem('auth_token')
+    // ИСПРАВЛЕНО: Ключ изменен на 'token'
+    localStorage.removeItem('token')
   }
 
   async request(endpoint, options = {}) {
-    const url = `${API_BASE_URL}${endpoint}`
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+    const url = `${API_BASE_URL}${cleanEndpoint}`
+    
     const headers = {
       'Content-Type': 'application/json',
       ...options.headers,
@@ -59,12 +57,17 @@ class ApiClient {
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ message: response.statusText }))
-        throw new Error(error.message || `API Error: ${response.status}`)
+        throw new Error(error.message || `Ошибка сервера: ${response.status}`)
       }
 
       return await response.json()
     } catch (error) {
       console.error(`API Request Error: ${endpoint}`, error)
+      
+      if (error instanceof TypeError || error.message?.includes('fetch')) {
+        throw new Error('Не удалось связаться с игровым сервером. Проверьте интернет-соединение или подождите завершения технических работ.')
+      }
+      
       throw error
     }
   }
@@ -135,8 +138,9 @@ class ApiClient {
     })
   }
 
+  // ИСПРАВЛЕНО: Путь изменен на /matchmaking/quick
   async startMatchmaking() {
-    return await this.request('/matchmaking', {
+    return await this.request('/matchmaking/quick', {
       method: 'POST',
     })
   }
@@ -147,9 +151,13 @@ class ApiClient {
     })
   }
 
-  async placeShips(ships) {
-    return await this.request('/game/ships', {
-      method: 'PUT',
+  // ИСПРАВЛЕНО: Теперь принимает gameId, метод изменен на POST, путь на /games/{gameId}/ships
+  async placeShips(gameId, ships) {
+    if (!gameId) {
+      throw new Error("Невозможно отправить корабли: отсутствует gameId")
+    }
+    return await this.request(`/games/${gameId}/ships`, {
+      method: 'POST',
       body: JSON.stringify({ ships }),
     })
   }
@@ -197,6 +205,7 @@ class ApiClient {
     })
   }
 
+  // Profile endpoints
   async getProfile() {
     return await this.request('/profile', {
       method: 'GET',

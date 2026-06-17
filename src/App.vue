@@ -6,6 +6,8 @@
       autoplay 
       muted 
       playsinline 
+      loop
+      preload="auto"
       class="absolute top-0 left-0 w-full h-full object-cover z-0 pointer-events-none opacity-55"
     />
 
@@ -31,51 +33,17 @@
       </div>
     </div>
 
-    <div v-else-if="isAuthorized && !isGameStarted" class="relative z-10 w-full max-w-lg p-4 animate-fade-in">
-      <div class="bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-1 shadow-[2px_2px_10px_rgba(0,0,0,0.5)] text-black">
-        
-        <div class="bg-gradient-to-r from-[#000080] to-[#1084d0] text-white px-2 py-1 flex items-center justify-between font-mono font-bold text-sm select-none">
-          <div class="flex items-center gap-2">
-            <span>⚓</span>
-            <span>Minesweeper_Battle_Control.exe</span>
-          </div>
-          <div class="flex gap-1">
-            <button class="w-4 h-4 bg-[#d4d0c8] text-black border border-t-white border-l-white border-b-gray-600 border-r-gray-600 text-[9px] font-bold flex items-center justify-center leading-none">_</button>
-            <button class="w-4 h-4 bg-[#d4d0c8] text-black border border-t-white border-l-white border-b-gray-600 border-r-gray-600 text-[10px] font-bold flex items-center justify-center leading-none">🗖</button>
-            <button @click="logout" class="w-4 h-4 bg-[#d4d0c8] text-black border border-t-white border-l-white border-b-gray-600 border-r-gray-600 text-[10px] font-bold flex items-center justify-center leading-none ml-1">X</button>
-          </div>
-        </div>
-
-        <div class="p-6 flex flex-col items-center justify-center gap-6 bg-[#d4d0c8]">
-          <div class="text-center select-none py-4 border border-dashed border-gray-500 w-full bg-gray-100/50">
-            <h2 class="text-5xl font-faero tracking-widest text-black drop-shadow-[2px_2px_0px_#fff]">
-              SEA BATTLE
-            </h2>
-            <p class="font-mono text-[11px] text-blue-900 mt-2 tracking-wide uppercase font-bold">
-              Вход выполнен: {{ currentUsername }}
-            </p>
-          </div>
-
-          <div class="w-full max-w-xs py-2">
-            <button 
-              @click="isGameStarted = true"
-              class="w-full py-4 text-2xl font-faero text-black bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#000] border-r-[#000] active:border-t-[#000] active:border-l-[#000] active:border-b-[#fff] active:border-r-[#fff] shadow-[1px_1px_0_0_#000] hover:bg-[#e6e6e6] transition-colors tracking-widest animate-win-pulse"
-            >
-              START GAME
-            </button>
-          </div>
-
-          <div class="w-full flex justify-between font-mono text-[10px] text-gray-600 border-t border-gray-400 pt-3">
-            <span>System: Microsoft Windows 95</span>
-            <span>v1.0.2026</span>
-          </div>
-        </div>
-
-      </div>
+    <div v-else-if="isAuthorized && !isGameStarted" class="relative z-10 w-full max-w-xl p-4 animate-fade-in">
+      <Lobby 
+        :username="currentUsername" 
+        @game-ready="startGameSession" 
+        @logout="logout"
+      />
     </div>
 
     <GameBoard 
       v-else 
+      :gameId="activeGameId"
       @back-to-menu="isGameStarted = false"
     />
 
@@ -85,13 +53,17 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import AuthForm from './components/AuthForm.vue'
+import Lobby from './components/Lobby.vue' 
 import GameBoard from './components/GameBoard.vue' 
+import { apiClient } from './api/client' // Импортируем исправленный клиент
 import Hls from 'hls.js'
 
+// Инициализируем пустой строкой, так как GameBoard ожидает String
+const activeGameId = ref('') 
 const isStartScreen = ref(true)
-const isAuthorized = ref(false) 
+const isAuthorized = ref(!!localStorage.getItem('token')) // ИСПРАВЛЕНО: Проверка по ключу 'token'
 const isGameStarted = ref(false)
-const currentUsername = ref('CyberCommander')
+const currentUsername = ref(localStorage.getItem('username') || 'CyberCommander')
 
 const videoRef = ref(null)
 let hlsInstance = null
@@ -108,22 +80,67 @@ const handleLoginSuccess = () => {
 }
 
 const logout = () => {
+  localStorage.removeItem('token') // ИСПРАВЛЕНО: Удаляем 'token' вместо 'auth_token'
+  localStorage.removeItem('username')
   isAuthorized.value = false
-  isGameStarted = false
-  isStartScreen = true
+  isGameStarted.value = false
+  isStartScreen.value = true
 }
 
+// Вызывается из Лобби при клике на кнопку «НАЧАТЬ ПОИСК СОПЕРНИКА»
+const startGameSession = async () => {
+  try {
+    activeGameId.value = '' // Сбрасываем старый ID перед началом новой сессии
+    
+    // ИСПРАВЛЕНО: Делаем запрос на быстрый поиск матча через apiClient (POST /api/matchmaking/quick)
+    await apiClient.startMatchmaking()
+    
+    isGameStarted.value = true
+    console.log("🚀 Поиск запущен на бэкенде. Переходим в GameBoard для подсоединения к веб-сокету.")
+  } catch (err) {
+    console.error(err)
+    alert(`Ошибка старта поиска матча: ${err.message || 'Не удалось связаться с сервером'}`)
+  }
+}
+
+// Инициализация фонового видеопотока HLS
 onMounted(async () => {
   await nextTick()
   const video = videoRef.value
   if (!video) return
 
+  video.muted = true
+
   if (Hls.isSupported()) {
-    hlsInstance = new Hls({ maxMaxBufferLength: 10, enableWorker: true, lowLatencyMode: true })
+    hlsInstance = new Hls({ 
+      maxMaxBufferLength: 10, 
+      enableWorker: true, 
+      lowLatencyMode: true,
+      autoStartLoad: true,
+      manifestLoadingMaxRetry: 3,
+      manifestLoadingRetryDelay: 2000,
+      levelLoadingMaxRetry: 3,
+      levelLoadingRetryDelay: 2000,
+      
+      xhrSetup: function (xhr, url) {
+        const token = localStorage.getItem('token') // ИСПРАВЛЕНО: Читаем 'token' вместо 'auth_token'
+        if (token) {
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+        }
+      }
+    })
+
     hlsInstance.loadSource(streamUrl)
     hlsInstance.attachMedia(video)
+
     hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
-      video.play().catch(err => console.warn("Видео ждет взаимодействия:", err))
+      const playVideo = () => {
+        video.play().catch(err => {
+          console.warn("Браузер заблокировал автоплей, пробуем снова...", err)
+          setTimeout(playVideo, 1000)
+        })
+      }
+      playVideo()
     })
 
     video.addEventListener('timeupdate', () => {
@@ -153,12 +170,6 @@ onBeforeUnmount(() => {
   50% { transform: scale(1.05); opacity: 1; }
 }
 .animate-pulse-slow { animation: pulseSlow 3s ease-in-out infinite; }
-
-@keyframes winPulse {
-  0%, 100% { transform: scale(1); box-shadow: 0 0 0px rgba(0,0,0,0); }
-  50% { transform: scale(1.03); box-shadow: 0 0 8px rgba(0,0,128,0.3); }
-}
-.animate-win-pulse { animation: winPulse 2s ease-in-out infinite; }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
