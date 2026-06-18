@@ -5,7 +5,7 @@ WORKDIR /app
 
 # Объявляем аргумент сборки. Если при сборке ничего не передать, 
 # подставится домен по умолчанию.
-ARG VITE_API_URL=http://team4.verstack.ru
+ARG VITE_API_URL=/api
 ENV VITE_API_URL=${VITE_API_URL}
 
 COPY package*.json ./

@@ -77,7 +77,7 @@
 
           <template v-else-if="step === 'otp'">
             <div class="text-xs font-bold mb-1 text-gray-700">
-              📡 Please enter the secure one-time verification code sent to your e-mail:
+              📡 Введите одноразовый код, отправленный на вашу почту:
             </div>
             <input 
               v-model="otpCode" 
@@ -170,17 +170,16 @@ const handleCredentialsSubmit = async () => {
       // Внутри apiClient.login() метод сам проверяет ответ бэкенда.
       // Если бэк вернул 200 + токен, он автоматически запишет его в localStorage под ключом 'token'
       if (response.token) {
-        localStorage.setItem('token', response.token) // Дублируем для совместимости с App.vue
+        localStorage.setItem('token', response.token)
         localStorage.setItem('username', username.value)
         statusType.value = 'success'
-        statusMessage.value = '🚀 Access granted! Welcome back.'
+        statusMessage.value = '🚀 Доступ разрешён! Добро пожаловать.'
         setTimeout(() => {
           emit('login-success')
         }, 1000)
       } else if (response.temp_token) {
-        // Если бэк вернул 202 (требуется 2FA), apiClient сохранил temp_token в sessionStorage
         statusType.value = 'success'
-        statusMessage.value = '📧 Password accepted. A secure 2FA code has been dispatched to your email.'
+        statusMessage.value = '📧 Пароль принят. Код 2FA отправлен на email.'
         setTimeout(() => {
           step.value = 'otp'
           statusMessage.value = ''
@@ -189,19 +188,14 @@ const handleCredentialsSubmit = async () => {
 
     } catch (err) {
       statusType.value = 'error'
-      if (err.message && err.message.includes('401')) {
-        statusMessage.value = '❌ Authentication failed: Invalid username or password.'
-      } else {
-        statusMessage.value = `❌ Ошибка входа: ${err.message || 'Connection refused'}`
-      }
+      statusMessage.value = `❌ ${err.message || 'Ошибка подключения к серверу'}`
     }
   } else {
     try {
-      // ИСПРАВЛЕНО: Используем метод регистрации через apiClient
       await apiClient.register(username.value, email.value, password.value)
 
       statusType.value = 'success'
-      statusMessage.value = '📧 Verification code successfully transmitted to your email.'
+      statusMessage.value = '📧 Код подтверждения отправлен на email.'
       
       setTimeout(() => {
         step.value = 'otp'
@@ -210,7 +204,7 @@ const handleCredentialsSubmit = async () => {
 
     } catch (err) {
       statusType.value = 'error'
-      statusMessage.value = `❌ Ошибка регистрации: ${err.message || 'Connection refused'}`
+      statusMessage.value = `❌ ${err.message || 'Ошибка подключения к серверу'}`
     }
   }
 }
@@ -222,21 +216,19 @@ const handleVerifyOtp = async () => {
     // ИСПРАВЛЕНО: Используем метод подтверждения 2FA кода через apiClient (/auth/2fa/authenticate)
     const response = await apiClient.verify2FA(otpCode.value)
 
-    // Если бэкенд отдал полноценный JWT токен
     if (response.token) {
-      localStorage.setItem('token', response.token) // ИСПРАВЛЕНО: Пишем в 'token' вместо 'auth_token'
+      localStorage.setItem('token', response.token)
       localStorage.setItem('username', username.value)
       statusType.value = 'success'
-      statusMessage.value = '🚀 Access granted! Loading...'
-      
+      statusMessage.value = '🚀 Доступ разрешён! Загрузка...'
+
       setTimeout(() => {
         emit('login-success')
       }, 1500)
     } else {
-      // Если токен не пришел сразу (например, после верификации новой регистрации), переводим в режим логина
       statusType.value = 'success'
-      statusMessage.value = '🎉 Identity verified successfully! Please log in.'
-      
+      statusMessage.value = '🎉 Личность подтверждена! Выполните вход.'
+
       setTimeout(() => {
         isLoginMode.value = true
         step.value = 'credentials'
@@ -246,7 +238,7 @@ const handleVerifyOtp = async () => {
     }
   } catch (err) {
     statusType.value = 'error'
-    statusMessage.value = `❌ Ошибка проверки OTP: ${err.message}`
+    statusMessage.value = `❌ ${err.message || 'Неверный код подтверждения'}`
   }
 }
 </script>

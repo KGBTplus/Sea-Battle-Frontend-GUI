@@ -56,8 +56,8 @@ class ApiClient {
       })
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: response.statusText }))
-        throw new Error(error.message || `Ошибка сервера: ${response.status}`)
+        const error = await response.json().catch(() => ({}))
+        throw new Error(error.error || error.message || 'Ошибка сервера')
       }
 
       return await response.json()
