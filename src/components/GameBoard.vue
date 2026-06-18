@@ -300,7 +300,8 @@ const parseMyIDFromToken = () => {
  */
 const initWebSocket = () => {
   const token = localStorage.getItem('token') || '' // ИСПРАВЛЕНО: 'token' вместо 'auth_token'
-  const wsUrl = `wss://team4.verstack.ru:30773/ws?token=${token}`
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const wsUrl = `${protocol}//${window.location.host}/ws?token=${token}`
   
   console.log("🔗 Подключение к новому WebSocket шлюзу матчмейкинга:", wsUrl)
   socket.value = new WebSocket(wsUrl)
