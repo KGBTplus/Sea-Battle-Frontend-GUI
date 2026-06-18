@@ -16,10 +16,21 @@
         <h3 class="text-lg font-bold font-mono tracking-wide" :class="getStatusColorClass">
           {{ getStatusMessage }}
         </h3>
+        <p v-if="opponentName && gameState !== 'searching' && gameState !== 'placement'" class="text-xs font-mono text-gray-600 mt-1">
+          ⚔️ {{ opponentName }}
+        </p>
+      </div>
+
+      <div v-if="gameState === 'finished'" class="w-full max-w-4xl flex flex-col items-center gap-3">
+        <button @click="goBackToMenu"
+          class="bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] px-8 py-3 font-faero text-lg text-black tracking-wider cursor-pointer hover:brightness-110 active:brightness-95 shadow-md transition-all">
+          🎮 PLAY AGAIN
+        </button>
+        <p class="font-mono text-xs text-gray-500">Автоматически через 5 секунд...</p>
       </div>
 
       <div v-if="notificationMessage" class="w-full max-w-4xl bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-3 text-center shadow-md font-mono text-xs font-bold uppercase tracking-wider animate-scale-pop"
-           :class="notificationType === 'error' ? 'text-red-700 border-red-500 bg-red-50' : 'text-green-700 border-green-500 bg-green-50'">
+            :class="notificationType === 'error' ? 'text-red-700 border-red-500 bg-red-50' : 'text-green-700 border-green-500 bg-green-50'">
         {{ notificationMessage }}
       </div>
 
@@ -109,7 +120,9 @@
         </div>
 
         <div class="w-full max-w-[500px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-6 text-black shadow-md">
-          <h2 class="text-2xl font-faero mb-4 text-center border-b-2 border-gray-400 pb-2 tracking-wide">ENEMY FLEET</h2>
+          <h2 class="text-2xl font-faero mb-4 text-center border-b-2 border-gray-400 pb-2 tracking-wide">
+            ENEMY FLEET <span v-if="opponentName" class="text-sm text-gray-600">({{ opponentName }})</span>
+          </h2>
           
           <div class="w-full aspect-square border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] p-2 relative"
                :style="{ backgroundImage: `url(${water2Url})`, backgroundSize: 'cover', backgroundPosition: 'center' }">
@@ -178,10 +191,23 @@ const props = defineProps({
 })
 const emit = defineEmits(['back-to-menu'])
 
+const playAgainTimeout = ref(null)
+
+const goBackToMenu = () => {
+  if (playAgainTimeout.value) {
+    clearTimeout(playAgainTimeout.value)
+    playAgainTimeout.value = null
+  }
+  emit('back-to-menu')
+}
+
 // Локальная копия ID игры, так как props изменять напрямую нельзя
 const localGameId = ref(props.gameId || '')
 
 const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J']
+
+const opponentName = ref('')
+const myUsername = ref(localStorage.getItem('username') || '')
 
 const notificationMessage = ref('')
 const notificationType = ref('success')
@@ -319,6 +345,60 @@ const initWebSocket = () => {
         case 'pong':
           break
 
+        case 'opponent_ready':
+          triggerNotification('👥 Соперник подтвердил готовность!', 'success', 3000)
+          break
+
+        case 'game_started':
+          let gsData = response.data
+          if (typeof gsData === 'string') {
+            try { gsData = JSON.parse(gsData) } catch(e) { gsData = null }
+          }
+          if (gsData && gsData.current_turn) {
+            currentTurnPlayerID.value = gsData.current_turn
+            gameState.value = (gsData.current_turn === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
+          }
+          triggerNotification('⚔️ Игра началась!', 'success', 3000)
+          break
+
+        case 'your_turn':
+          if (myPlayerID.value) {
+            currentTurnPlayerID.value = myPlayerID.value
+            gameState.value = 'player-turn'
+          }
+          triggerNotification('💥 Ваш ход!', 'success', 3000)
+          break
+
+        case 'opponent_moved':
+          {
+            let md = response.data
+            if (typeof md === 'string') { try { md = JSON.parse(md) } catch(e) { md = null } }
+            if (md && typeof md.x === 'number' && typeof md.y === 'number') {
+              const status = md.hit ? 'hit' : 'miss'
+              playerDefenseGrid.value[md.y][md.x] = status
+            }
+          }
+          break
+
+        case 'opponent_ships_placed':
+          triggerNotification('👥 Соперник расставляет корабли...', 'success', 3000)
+          break
+
+        case 'game_over':
+          {
+            let gd = response.data
+            if (typeof gd === 'string') { try { gd = JSON.parse(gd) } catch(e) { gd = null } }
+            const winnerId = gd ? (gd.winner_id || gd.WinnerID) : null
+            if (winnerId === myPlayerID.value) {
+              triggerNotification('🏆 ПОБЕДА! Вражеский флот полностью разгромлен!', 'success', null)
+            } else {
+              triggerNotification('💥 ПОРАЖЕНИЕ. Ваш флот уничтожен.', 'error', null)
+            }
+            gameState.value = 'finished'
+            playAgainTimeout.value = setTimeout(() => goBackToMenu(), 5000)
+          }
+          break
+
         case 'error':
           triggerNotification(`❌ Ошибка сервера: ${response.message || 'Неизвестный сбой'}`, 'error', 5000)
           break
@@ -369,7 +449,7 @@ const processServerGameState = (game) => {
     } else {
       triggerNotification('💥 ПОРАЖЕНИЕ. Ваш флот уничтожен.', 'error', null)
     }
-    setTimeout(() => emit('back-to-menu'), 5000)
+    playAgainTimeout.value = setTimeout(() => goBackToMenu(), 5000)
     return
   }
 
@@ -377,6 +457,11 @@ const processServerGameState = (game) => {
     const turnId = game.CurrentTurn || game.current_turn
     currentTurnPlayerID.value = turnId
     gameState.value = (turnId === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
+    const p1name = game.player1_name || game.Player1Name
+    const p2name = game.player2_name || game.Player2Name
+    if (p1name && p2name) {
+      opponentName.value = (myPlayerID.value === (game.player1_id || game.Player1ID)) ? p2name : p1name
+    }
   }
 
   // Очистка сеток перед рендером
@@ -474,8 +559,17 @@ const handleEnemyCellShot = async (row, col) => {
     })
 
     if (!response.ok) {
-      throw new Error(`Ошибка ${response.status}`)
+      const errBody = await response.json().catch(() => ({}))
+      throw new Error(errBody.error || errBody.message || 'Ошибка сервера')
     }
+
+    const gameStateResponse = await response.json()
+    processServerGameState(gameStateResponse)
+    const moves = gameStateResponse.Moves || gameStateResponse.moves || []
+    const lastMove = moves.length > 0 ? moves[moves.length - 1] : null
+    const isHit = lastMove ? (lastMove.hit || lastMove.Hit) : false
+    enemyAttackGrid.value[row][col].status = isHit ? 'hit' : 'miss'
+    enemyAttackGrid.value[row][col].exploding = isHit
   } catch (err) {
     triggerNotification(`❌ Осечка орудия: ${err.message}`, 'error', 3000)
   } finally {
@@ -641,6 +735,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (playAgainTimeout.value) {
+    clearTimeout(playAgainTimeout.value)
+  }
   clearInterval(pingInterval)
   if (socket.value) {
     socket.value.close()
