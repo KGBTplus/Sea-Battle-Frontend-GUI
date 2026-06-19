@@ -100,15 +100,22 @@ class ApiClient {
   }
 
   async register(username, email, password) {
-    return await this.request('/auth/register', {
+    const response = await this.request('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ username, email, password }),
     })
+    if (response.token) {
+      this.setToken(response.token)
+    }
+    if (response.temp_token) {
+      this.setTempToken(response.temp_token)
+    }
+    return response
   }
 
   // Game endpoints
   async getActiveGame() {
-    return await this.request('/game', {
+    return await this.request('/games/active', {
       method: 'GET',
     })
   }
@@ -193,8 +200,8 @@ class ApiClient {
     })
   }
 
-  async forfeitGame() {
-    return await this.request('/game/forfeit', {
+  async forfeitGame(gameId) {
+    return await this.request(`/games/${gameId}/forfeit`, {
       method: 'POST',
     })
   }
@@ -215,13 +222,59 @@ class ApiClient {
   async updatePassword(oldPassword, newPassword) {
     return await this.request('/profile/password', {
       method: 'PUT',
-      body: JSON.stringify({ oldPassword, newPassword }),
+      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
     })
   }
 
-  async getLeaderboard() {
-    return await this.request('/leaderboard', {
+  async sendChangePasswordCode() {
+    return await this.request('/auth/password/change/send-code', {
+      method: 'POST',
+    })
+  }
+
+  async sendForgotPasswordCode(username) {
+    return await this.request('/auth/password/forgot/send-code', {
+      method: 'POST',
+      body: JSON.stringify({ username }),
+    })
+  }
+
+  async resetForgotPassword(username, code, newPassword) {
+    return await this.request('/auth/password/forgot/reset', {
+      method: 'POST',
+      body: JSON.stringify({ username, code, new_password: newPassword }),
+    })
+  }
+
+  async getLeaderboard(limit = 15) {
+    return await this.request(`/leaderboard?limit=${limit}`, {
       method: 'GET',
+    })
+  }
+
+  async updateProfile(username) {
+    return await this.request('/profile', {
+      method: 'PATCH',
+      body: JSON.stringify({ username }),
+    })
+  }
+
+  async setup2FA() {
+    return await this.request('/auth/2fa/setup', {
+      method: 'POST',
+    })
+  }
+
+  async verify2FASetup(code) {
+    return await this.request('/auth/2fa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    })
+  }
+
+  async disable2FA() {
+    return await this.request('/auth/2fa/disable', {
+      method: 'POST',
     })
   }
 }
