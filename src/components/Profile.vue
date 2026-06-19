@@ -21,7 +21,7 @@
             <span class="text-gray-600">Игрок:</span>
             <span class="font-bold">{{ profile.username }}</span>
             <span class="text-gray-600">Email:</span>
-            <span>{{ profile.email }}</span>
+            <span>{{ profile.email_masked }}</span>
             <span class="text-gray-600">Зарегистрирован:</span>
             <span>{{ formatDate(profile.created_at) }}</span>
           </div>
@@ -152,7 +152,7 @@
               <input
                 v-model="pwNewPassword"
                 :type="showPwNew ? 'text' : 'password'"
-                placeholder="Новый пароль (8-20 символов)"
+                placeholder="Новый пароль (от 8 символов)"
                 class="w-full px-2 py-1 border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] bg-white text-xs outline-none pr-8"
               />
               <button

@@ -169,37 +169,6 @@ class ApiClient {
     })
   }
 
-  async confirmShips() {
-    return await this.request('/game/ships/confirm', {
-      method: 'POST',
-    })
-  }
-
-  async randomShips() {
-    return await this.request('/game/ships/random', {
-      method: 'POST',
-    })
-  }
-
-  async makeMove(x, y) {
-    return await this.request('/game/move', {
-      method: 'POST',
-      body: JSON.stringify({ x, y }),
-    })
-  }
-
-  async getGameResult() {
-    return await this.request('/game/result', {
-      method: 'GET',
-    })
-  }
-
-  async getGameHistory() {
-    return await this.request('/game/history', {
-      method: 'GET',
-    })
-  }
-
   async forfeitGame(gameId) {
     return await this.request(`/games/${gameId}/forfeit`, {
       method: 'POST',
@@ -223,12 +192,6 @@ class ApiClient {
     return await this.request('/profile/password', {
       method: 'PUT',
       body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
-    })
-  }
-
-  async sendChangePasswordCode() {
-    return await this.request('/auth/password/change/send-code', {
-      method: 'POST',
     })
   }
 

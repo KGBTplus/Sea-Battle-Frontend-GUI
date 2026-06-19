@@ -5,7 +5,6 @@
       <div class="bg-gradient-to-r from-[#000080] to-[#033da9] text-white px-2 py-1 flex justify-between items-center font-bold text-xs m-0 mb-4">
         <div class="flex items-center gap-1">
           <span>{{ isLoginMode ? 'Войти' : 'Регистрация' }}</span>
-          <span v-if="DEBUG_MODE" class="ml-2 bg-red-600 text-[9px] px-1 animate-pulse text-white border border-white">DEBUG MODE BILS</span>
         </div>
         <button 
           @click.stop="resetToInitial"
@@ -95,8 +94,8 @@
           </template>
 
           <template v-else-if="step === 'forgot-password'">
-            <div class="text-xs font-bold mb-1 text-gray-700" v-if="forgotEmailMask">
-              Код отправлен на {{ forgotEmailMask }}
+            <div class="text-xs font-bold mb-1 text-gray-700">
+              Код отправлен на вашу почту (если пользователь существует и email подтверждён)
             </div>
             <input
               v-model="forgotCode"
@@ -108,7 +107,7 @@
               <input
                 v-model="forgotNewPassword"
                 :type="showForgotNew ? 'text' : 'password'"
-                placeholder="Новый пароль (8-20 символов)"
+                placeholder="Новый пароль (от 8 символов)"
                 class="w-full p-2 bg-white text-black outline-none text-xs border-2 border-t-[#808080] border-l-[#808080] border-b-white border-r-white pr-8"
               />
               <button
@@ -210,8 +209,6 @@
 import { ref } from 'vue'
 import { apiClient } from '../api/client'
 
-const DEBUG_MODE = ref(false)
-
 const username = ref('')
 const email = ref('')
 const password = ref('')
@@ -261,17 +258,6 @@ const handleCredentialsSubmit = async () => {
   if (isSubmitting.value) return
   isSubmitting.value = true
   statusMessage.value = ''
-
-  if (DEBUG_MODE.value) {
-    statusType.value = 'success'
-    statusMessage.value = '⚠️ [DEBUG MODE] Перевожу на OTP...'
-    setTimeout(() => {
-      step.value = 'otp'
-      statusMessage.value = ''
-      isSubmitting.value = false
-    }, 500)
-    return
-  }
 
   try {
     let response
@@ -376,11 +362,11 @@ const handleForgotPasswordSendCode = async () => {
   isSubmitting.value = true
   statusMessage.value = ''
   try {
-    const data = await apiClient.sendForgotPasswordCode(username.value.trim())
-    forgotEmailMask.value = data.email
+    await apiClient.sendForgotPasswordCode(username.value.trim())
+    forgotEmailMask.value = ''
     step.value = 'forgot-password'
     statusType.value = 'success'
-    statusMessage.value = 'Код отправлен на ' + data.email
+    statusMessage.value = 'Если пользователь с таким именем существует и email подтверждён, код отправлен на почту'
   } catch (err) {
     statusType.value = 'error'
     statusMessage.value = `❌ ${err.message || 'Ошибка отправки кода'}`
