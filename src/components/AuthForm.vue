@@ -15,7 +15,7 @@
         </button>
       </div>
 
-      <div class="p-3">
+      <div class="p-3" @keydown.enter.prevent="handleStepEnter">
         <div v-if="step !== 'otp'" class="flex gap-[2px] mb-4 border-b-2 border-[#808080] pb-[2px]">
           <button 
             @click="isLoginMode = true; statusMessage = ''; step = 'credentials'"
@@ -244,14 +244,25 @@ const resetToInitial = () => {
   emit('close')
 }
 
-const loginSuccess = (usernameVal) => {
+const loginSuccess = (usernameVal, userIdVal) => {
   localStorage.setItem('username', usernameVal)
+  if (userIdVal) {
+    localStorage.setItem('user_id', userIdVal)
+  }
+  apiClient.refreshWsToken()
   statusType.value = 'success'
   statusMessage.value = '🚀 Доступ разрешён!'
   setTimeout(() => {
     emit('login-success')
     isSubmitting.value = false
   }, 800)
+}
+
+const handleStepEnter = () => {
+  if (isSubmitting.value) return
+  if (step.value === 'credentials') handleCredentialsSubmit()
+  else if (step.value === 'otp') handleVerifyOtp()
+  else if (step.value === 'forgot-password') handleForgotPasswordReset()
 }
 
 const handleCredentialsSubmit = async () => {
@@ -267,11 +278,9 @@ const handleCredentialsSubmit = async () => {
       response = await apiClient.register(username.value, email.value, password.value)
     }
 
-    if (response.token) {
-      apiClient.setToken(response.token)
-      loginSuccess(username.value)
-    } else if (response.temp_token) {
-      apiClient.setTempToken(response.temp_token)
+    if (response.user_id) {
+      loginSuccess(username.value, response.user_id)
+    } else if (response.message === 'Код отправлен на email') {
       statusType.value = 'success'
       statusMessage.value = '📧 Код отправлен на email'
       setTimeout(() => {
@@ -305,11 +314,9 @@ const handleResendCode = async () => {
       response = await apiClient.register(username.value, email.value, password.value)
     }
 
-    if (response.token) {
-      apiClient.setToken(response.token)
-      loginSuccess(username.value)
-    } else if (response.temp_token) {
-      apiClient.setTempToken(response.temp_token)
+    if (response.user_id) {
+      loginSuccess(username.value, response.user_id)
+    } else if (response.message === 'Код отправлен на email') {
       statusType.value = 'success'
       statusMessage.value = '📧 Код отправлен повторно'
       setTimeout(() => { statusMessage.value = '' }, 3000)
@@ -329,9 +336,8 @@ const handleVerifyOtp = async () => {
 
   try {
     const response = await apiClient.verify2FA(otpCode.value)
-    if (response.token) {
-      apiClient.setToken(response.token)
-      loginSuccess(username.value)
+    if (response.user_id) {
+      loginSuccess(username.value, response.user_id)
     }
   } catch (err) {
     statusType.value = 'error'

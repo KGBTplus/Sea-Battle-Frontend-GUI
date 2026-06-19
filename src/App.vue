@@ -69,12 +69,12 @@ import Hls from 'hls.js'
 // Инициализируем пустой строкой, так как GameBoard ожидает String
 const activeGameId = ref('') 
 const isStartScreen = ref(true)
-const isAuthorized = ref(!!localStorage.getItem('token')) // ИСПРАВЛЕНО: Проверка по ключу 'token'
+const isAuthorized = ref(false)
 const isGameStarted = ref(false)
 const isLobbyWait = ref(false)
 const showLeaderboard = ref(false)
 const showProfile = ref(false)
-const currentUsername = ref(localStorage.getItem('username') || 'CyberCommander')
+const currentUsername = ref('CyberCommander')
 
 const videoRef = ref(null)
 let hlsInstance = null
@@ -90,9 +90,12 @@ const handleLoginSuccess = () => {
   isAuthorized.value = true
 }
 
-const logout = () => {
-  localStorage.removeItem('token') // ИСПРАВЛЕНО: Удаляем 'token' вместо 'auth_token'
+const logout = async () => {
+  try {
+    await apiClient.logout()
+  } catch {}
   localStorage.removeItem('username')
+  localStorage.removeItem('user_id')
   isAuthorized.value = false
   isGameStarted.value = false
   showLeaderboard.value = false
@@ -124,6 +127,19 @@ const startGameSession = async (gameId) => {
 // Инициализация фонового видеопотока HLS
 onMounted(async () => {
   await nextTick()
+
+  // Проверяем авторизацию через сервер
+  try {
+    const authData = await apiClient.checkAuth()
+    if (authData && authData.user_id) {
+      localStorage.setItem('user_id', authData.user_id)
+      if (authData.username) {
+        localStorage.setItem('username', authData.username)
+      }
+      isAuthorized.value = true
+    }
+  } catch {}
+
   const video = videoRef.value
   if (!video) return
 
@@ -139,13 +155,6 @@ onMounted(async () => {
       manifestLoadingRetryDelay: 2000,
       levelLoadingMaxRetry: 3,
       levelLoadingRetryDelay: 2000,
-      
-      xhrSetup: function (xhr, url) {
-        const token = localStorage.getItem('token') // ИСПРАВЛЕНО: Читаем 'token' вместо 'auth_token'
-        if (token) {
-          xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-        }
-      }
     })
 
     hlsInstance.loadSource(streamUrl)

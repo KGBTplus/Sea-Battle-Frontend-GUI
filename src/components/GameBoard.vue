@@ -63,7 +63,11 @@
             <h2 class="text-xl font-faero mb-3 text-center border-b-2 border-gray-400 pb-2 tracking-wide">SHIP DOCK</h2>
             
              <div class="text-[10px] font-mono mb-3 text-center text-gray-600 bg-gray-200 p-2 border border-gray-400">
-              <template v-if="gameState === 'placement'">
+              <template v-if="isReady">
+                <p class="font-bold text-green-800">✔ Флот зафиксирован</p>
+                <p class="text-xs mt-1">Ожидаем готовности оппонента.</p>
+              </template>
+              <template v-else-if="gameState === 'placement'">
                 <p class="font-bold text-blue-800">⚓ Расстановка:</p>
                 <p>Тащите корабль из дока на поле, либо тащите с поля на новое место!</p>
                 <p class="font-bold text-emerald-800 mt-1">🔄 Поворот:</p>
@@ -81,10 +85,10 @@
             </div>
             
             <div class="flex flex-wrap gap-3 justify-center items-center overflow-y-auto flex-grow max-h-[450px] p-3 bg-gray-300/50 border border-inset border-gray-400">
-              <template v-for="ship in availableShips" :key="ship.id">
+              <template v-if="!isReady" v-for="ship in availableShips" :key="ship.id">
                 <div 
                   v-if="!ship.placed"
-                  :draggable="gameState === 'placement'"
+                  :draggable="gameState === 'placement' && !isReady"
                   @dragstart="handleDragStart($event, ship, 'dock')"
                   @dragend="handleDragEnd"
                   @click="toggleDockShipDirection(ship)"
@@ -109,7 +113,7 @@
             <div 
               v-for="ship in placedShips" 
               :key="'placed-'+ship.id"
-              :draggable="gameState === 'placement'"
+              :draggable="gameState === 'placement' && !isReady"
               @dragstart="handleDragStart($event, ship, 'board')"
               @dragend="handleDragEnd"
               @click="handlePlacedShipClick(ship)"
@@ -117,7 +121,7 @@
               @dblclick="removeShipFromBoard(ship)"
                class="absolute border border-white/40 shadow-md overflow-hidden bg-blue-950/20 transition-all duration-75"
               :class="[
-                gameState === 'placement' ? 'z-20 cursor-grab active:cursor-grabbing hover:brightness-125 hover:scale-[1.02] pointer-events-auto' : 'z-0 cursor-default pointer-events-none',
+                gameState === 'placement' && !isReady ? 'z-20 cursor-grab active:cursor-grabbing hover:brightness-125 hover:scale-[1.02] pointer-events-auto' : 'z-20 cursor-default pointer-events-none',
                 { 'pointer-events-none': isDragging }
               ]"
               :style="getPlacedShipStyle(ship)"
@@ -214,12 +218,20 @@
 
       </div>
 
-      <div v-if="allShipsPlaced && gameState === 'placement'" class="w-full max-w-xs animate-bounce-short z-30 mt-4">
+      <div v-if="allShipsPlaced && gameState === 'placement'" class="w-full max-w-xs z-30 mt-4 flex flex-col items-center gap-3">
         <button 
-          @click="sendShipsToServer"
-          class="w-full py-4 text-xl font-faero text-black bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#000] border-r-[#000] active:border-t-[#000] active:border-l-[#000] active:border-b-[#fff] active:border-r-[#fff] shadow-md hover:bg-gray-100 transition-colors tracking-widest"
+          @click="toggleReady"
+          class="w-full py-4 text-xl font-faero text-black bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#000] border-r-[#000] active:border-t-[#000] active:border-l-[#000] active:border-b-[#fff] active:border-r-[#fff] shadow-md hover:bg-gray-100 tracking-widest"
+          :class="{ 'btn--dimmed': isReady }"
         >
-          CONFIRM FLEET
+          {{ isReady ? '✔ ГОТОВ' : '⚓ ГОТОВ' }}
+        </button>
+        <button 
+          v-if="isReady"
+          @click="handleChangeLayout"
+          class="py-2 px-4 text-sm font-faero text-gray-700 bg-gray-300 border border-gray-400 hover:bg-gray-400 active:bg-gray-500 tracking-wider transition-colors"
+        >
+          ✏️ ИЗМЕНИТЬ РАССТАНОВКУ
         </button>
       </div>
 
@@ -256,6 +268,14 @@ const props = defineProps({
 const emit = defineEmits(['back-to-menu'])
 
 const playAgainTimeout = ref(null)
+
+const handleGlobalKeydown = (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+  if (e.key === 'Enter' && gameState.value === 'placement' && allShipsPlaced.value) {
+    e.preventDefault()
+    toggleReady()
+  }
+}
 
 const goBackToMenu = () => {
   if (playAgainTimeout.value) {
@@ -300,6 +320,46 @@ const myPlayerID = ref(null)
 
 const socket = ref(null)
 let pingInterval = null // Переменная для таймера Heartbeat
+
+const isReady = ref(false)
+
+const SHIPS_STORAGE_KEY = 'placed_ships'
+
+const saveShipsPlacement = () => {
+  try {
+    const data = availableShips.value.map(s => ({
+      id: s.id, size: s.size, placed: s.placed,
+      row: s.row, col: s.col, direction: s.direction
+    }))
+    localStorage.setItem(SHIPS_STORAGE_KEY, JSON.stringify(data))
+  } catch (e) {
+    console.warn('Failed to save ship placement:', e)
+  }
+}
+
+const loadShipsPlacement = () => {
+  try {
+    const raw = localStorage.getItem(SHIPS_STORAGE_KEY)
+    if (!raw) return false
+    const data = JSON.parse(raw)
+    data.forEach(saved => {
+      const ship = availableShips.value.find(s => s.id === saved.id)
+      if (ship) {
+        ship.placed = saved.placed
+        ship.row = saved.row
+        ship.col = saved.col
+        ship.direction = saved.direction
+      }
+    })
+    return true
+  } catch { return false }
+}
+
+const clearShipsPlacement = () => {
+  try {
+    localStorage.removeItem(SHIPS_STORAGE_KEY)
+  } catch {}
+}
 
 // Инициализация сетки атак (правой)
 const enemyAttackGrid = ref(
@@ -376,18 +436,9 @@ const canUserShoot = computed(() => {
 })
 
 const parseMyIDFromToken = () => {
-  const token = localStorage.getItem('token') // ИСПРАВЛЕНО: 'token' вместо 'auth_token'
-  if (!token) return
-  try {
-    const base64Url = token.split('.')[1]
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-    }).join(''))
-    const claims = JSON.parse(jsonPayload)
-    myPlayerID.value = claims.sub || claims.id
-  } catch (e) {
-    console.error("Не удалось декодировать JWT token:", e)
+  const uid = localStorage.getItem('user_id')
+  if (uid) {
+    myPlayerID.value = uid
   }
 }
 
@@ -395,12 +446,13 @@ const parseMyIDFromToken = () => {
  * ИНИЦИАЛИЗАЦИЯ WEBSOCKET С УЧЕТОМ НОВОГО МАТЧМЕЙКИНГА И KEEP-ALIVE
  */
 const initWebSocket = () => {
-  const token = localStorage.getItem('token') || '' // ИСПРАВЛЕНО: 'token' вместо 'auth_token'
+  const token = apiClient.getWsToken() || ''
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${protocol}//${window.location.host}/ws?token=${token}`
+  const wsUrl = `${protocol}//${window.location.host}/ws`
+  const wsProtocols = token ? ['auth_' + token] : []
   
   console.log("🔗 Подключение к новому WebSocket шлюзу матчмейкинга:", wsUrl)
-  socket.value = new WebSocket(wsUrl)
+  socket.value = wsProtocols.length ? new WebSocket(wsUrl, wsProtocols) : new WebSocket(wsUrl)
 
   socket.value.onopen = () => {
     triggerNotification('📡 Подключение к игровому серверу установлено!', 'success', 3000)
@@ -435,6 +487,7 @@ const initWebSocket = () => {
               console.error("Ошибка десериализации MatchFoundData:", parseErr)
             }
           }
+          clearShipsPlacement()
           gameState.value = 'placement'
           triggerNotification('⚔️ Соперник найден! Переходим к расстановке флота.', 'success', 4000)
           break
@@ -517,6 +570,7 @@ const initWebSocket = () => {
             } else {
               triggerNotification('💥 ПОРАЖЕНИЕ. Ваш флот уничтожен.', 'error', null)
             }
+            clearShipsPlacement()
             gameState.value = 'finished'
             playAgainTimeout.value = setTimeout(() => goBackToMenu(), 5000)
           }
@@ -704,28 +758,59 @@ const sendShipsToServer = async () => {
   triggerNotification('🚀 Отправка диспозиции сил в штаб...', 'success', 3000)
 
   try {
-    const token = localStorage.getItem('token')
-    await fetch(`/api/games/${localGameId.value}/ships/reset`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-
+    await apiClient.shipsReset(localGameId.value)
     await apiClient.placeShips(localGameId.value, shipsArray)
-
-    const confirmResponse = await fetch(`/api/games/${localGameId.value}/ships/confirm`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-
-    if (!confirmResponse.ok) {
-      throw new Error("Не удалось подтвердить готовность")
-    }
+    await apiClient.shipsConfirm(localGameId.value)
 
     triggerNotification('⚓ Флот зафиксирован. Ожидаем готовности оппонента...', 'success', 15000)
   } catch (err) {
     console.error(err)
     gameState.value = 'placement'
     triggerNotification(`❌ Отклонено штабом: ${err.message}`, 'error', 6000)
+  }
+}
+
+const handleReady = async () => {
+  if (isReady.value) return
+  const shipsArray = availableShips.value.map(ship => {
+    const xCoord = typeof ship.col === 'number' ? ship.col : 0
+    const yCoord = typeof ship.row === 'number' ? ship.row : 0
+    return {
+      ship_type: Number(ship.size),
+      start_x: xCoord,
+      start_y: yCoord,
+      horizontal: ship.direction === 'horizontal'
+    }
+  })
+
+  try {
+    await apiClient.shipsReset(localGameId.value)
+    await apiClient.placeShips(localGameId.value, shipsArray)
+    await apiClient.shipsConfirm(localGameId.value)
+    saveShipsPlacement()
+    isReady.value = true
+    triggerNotification('⚓ Флот зафиксирован. Ожидаем готовности оппонента...', 'success', 15000)
+  } catch (err) {
+    triggerNotification(`❌ Ошибка: ${err.message}`, 'error', 6000)
+  }
+}
+
+const handleChangeLayout = async () => {
+  try {
+    await apiClient.shipsReset(localGameId.value)
+    isReady.value = false
+    triggerNotification('🔄 Расстановка разблокирована. Вы можете изменить позицию кораблей.', 'success', 3000)
+  } catch (err) {
+    triggerNotification(`❌ Ошибка: ${err.message}`, 'error', 3000)
+  }
+  saveShipsPlacement()
+}
+
+const toggleReady = () => {
+  if (isReady.value) {
+    handleChangeLayout()
+  } else if (allShipsPlaced.value) {
+    handleReady()
   }
 }
 
@@ -737,25 +822,9 @@ const handleEnemyCellShot = async (row, col) => {
   if (enemyAttackGrid.value[row][col].status !== 'none' || enemyAttackGrid.value[row][col].animating) return
   
   enemyAttackGrid.value[row][col].animating = true
-  const token = localStorage.getItem('token')
-  const url = `/api/games/${localGameId.value}/move`
 
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ x: col, y: row })
-    })
-
-    if (!response.ok) {
-      const errBody = await response.json().catch(() => ({}))
-      throw new Error(errBody.error || errBody.message || 'Ошибка сервера')
-    }
-
-    const gameStateResponse = await response.json()
+    const gameStateResponse = await apiClient.makeMove(localGameId.value, col, row)
     processServerGameState(gameStateResponse)
     const moves = gameStateResponse.Moves || gameStateResponse.moves || []
     const lastMove = moves.length > 0 ? moves[moves.length - 1] : null
@@ -824,6 +893,7 @@ const handlePlacedShipClick = (ship) => {
   const nextDir = ship.direction === 'horizontal' ? 'vertical' : 'horizontal'
   if (!validateShipPlacement(ship.row, ship.col, ship.size, nextDir, ship.id)) {
     ship.direction = nextDir
+    saveShipsPlacement()
   } else {
     triggerNotification('❌ Невозможно повернуть: нет места для маневра.', 'error', 2000)
   }
@@ -832,6 +902,7 @@ const handlePlacedShipClick = (ship) => {
 const toggleDockShipDirection = (ship) => {
   if (gameState.value !== 'placement') return
   ship.direction = ship.direction === 'horizontal' ? 'vertical' : 'horizontal'
+  saveShipsPlacement()
 }
 
 const randomizeFleet = () => {
@@ -879,6 +950,7 @@ const randomizeFleet = () => {
       triggerNotification(`❌ Не удалось разместить корабль ${ship.size}-го размера`, 'error', 3000)
     }
   }
+  saveShipsPlacement()
 }
 
 const forfeitGame = async () => {
@@ -896,6 +968,7 @@ const removeShipFromBoard = (ship) => {
     ship.placed = false
     ship.row = null
     ship.col = null 
+    saveShipsPlacement()
   } 
 }
 
@@ -962,6 +1035,7 @@ const handleDrop = (row, col) => {
       s.col = col
       s.placed = true 
     }
+    saveShipsPlacement()
   } else {
     if (dragSource.value === 'board') {
       triggerNotification('❌ Нельзя поставить сюда: позиция заблокирована или нарушает границы флота', 'error', 3000)
@@ -989,10 +1063,13 @@ const resetFish2 = async () => { isFish2Active.value = false; fish2Top.value = g
 
 onMounted(() => {
   parseMyIDFromToken()
+  loadShipsPlacement()
   initWebSocket()
+  document.addEventListener('keydown', handleGlobalKeydown)
 })
 
 onUnmounted(() => {
+  document.removeEventListener('keydown', handleGlobalKeydown)
   if (playAgainTimeout.value) {
     clearTimeout(playAgainTimeout.value)
   }
@@ -1022,4 +1099,10 @@ onUnmounted(() => {
 @keyframes laserScan { from { transform: scale(1.1); opacity: 0.5; } to { transform: scale(0.9); opacity: 1; } }
 .explosion-flash { background-color: #ffffff; animation: flashExplode 0.25s ease-out forwards; }
 @keyframes flashExplode { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+.btn--dimmed {
+  opacity: 0.6;
+  background-color: #a0a0a0 !important;
+  transition: opacity 0.2s, background-color 0.2s;
+}
 </style>

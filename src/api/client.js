@@ -1,42 +1,32 @@
-// API Client для общения с бекендом
 const API_BASE_URL = import.meta.env.DEV 
   ? 'http://localhost:8080' 
   : (import.meta.env.VITE_API_URL || '/api')
 
+let wsToken = null
+
 class ApiClient {
-  constructor() {
-    // ИСПРАВЛЕНО: Ключ изменен на 'token'
-    this.token = localStorage.getItem('token')
-    this.tempToken = sessionStorage.getItem('temp_token')
+  setWsToken(token) {
+    wsToken = token
   }
 
-  setToken(token) {
-    this.token = token
-    // ИСПРАВЛЕНО: Ключ изменен на 'token'
-    localStorage.setItem('token', token)
+  getWsToken() {
+    return wsToken
   }
 
-  setTempToken(tempToken) {
-    this.tempToken = tempToken
-    if (tempToken) {
-      sessionStorage.setItem('temp_token', tempToken)
-    } else {
-      sessionStorage.removeItem('temp_token')
+  async refreshWsToken() {
+    try {
+      const data = await this.request('/auth/ws-token', { method: 'GET' })
+      if (data.token) {
+        wsToken = data.token
+      }
+      return data.token
+    } catch {
+      wsToken = null
+      return null
     }
   }
 
-  getToken() {
-    return this.token
-  }
-
-  clearToken() {
-    this.token = null
-    this.tempToken = null
-    // ИСПРАВЛЕНО: Ключ изменен на 'token'
-    localStorage.removeItem('token')
-  }
-
-  async request(endpoint, options = {}) {
+  async request(endpoint, options = {}, retried = false) {
     const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
     const url = `${API_BASE_URL}${cleanEndpoint}`
     
@@ -45,15 +35,20 @@ class ApiClient {
       ...options.headers,
     }
 
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`
-    }
-
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        credentials: 'include',
       })
+
+      if (response.status === 401 && !retried) {
+        // Попробуем обновить токены
+        const refreshed = await this.refreshAuth()
+        if (refreshed) {
+          return await this.request(endpoint, options, true)
+        }
+      }
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({}))
@@ -72,48 +67,69 @@ class ApiClient {
     }
   }
 
-  // Auth endpoints
+  async refreshAuth() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+      })
+      if (!res.ok) return false
+      const data = await res.json()
+      if (data.user_id) {
+        localStorage.setItem('user_id', data.user_id)
+        if (data.username) localStorage.setItem('username', data.username)
+        await this.refreshWsToken()
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  async checkAuth() {
+    try {
+      const data = await this.request('/auth/me', { method: 'GET' })
+      if (data && data.user_id) {
+        await this.refreshWsToken()
+      }
+      return data
+    } catch {
+      // Если /auth/me упал, пробуем refresh
+      const refreshed = await this.refreshAuth()
+      if (refreshed) {
+        return await this.request('/auth/me', { method: 'GET' })
+      }
+      throw new Error('Не авторизован')
+    }
+  }
+
+  async logout() {
+    return await this.request('/auth/logout', { method: 'POST' })
+  }
+
   async login(username, password) {
-    const response = await this.request('/auth/login', {
+    return await this.request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     })
-    if (response.token) {
-      this.setToken(response.token)
-    }
-    if (response.temp_token) {
-      this.setTempToken(response.temp_token)
-    }
-    return response
   }
 
   async verify2FA(code) {
-    const response = await this.request('/auth/2fa/authenticate', {
+    return await this.request('/auth/2fa/authenticate', {
       method: 'POST',
-      body: JSON.stringify({ temp_token: this.tempToken, code }),
+      body: JSON.stringify({ code }),
     })
-    if (response.token) {
-      this.setToken(response.token)
-      this.setTempToken(null)
-    }
-    return response
   }
 
   async register(username, email, password) {
-    const response = await this.request('/auth/register', {
+    return await this.request('/auth/register', {
       method: 'POST',
       body: JSON.stringify({ username, email, password }),
     })
-    if (response.token) {
-      this.setToken(response.token)
-    }
-    if (response.temp_token) {
-      this.setTempToken(response.temp_token)
-    }
-    return response
   }
 
-  // Game endpoints
   async getActiveGame() {
     return await this.request('/games/active', {
       method: 'GET',
@@ -145,7 +161,6 @@ class ApiClient {
     })
   }
 
-  // ИСПРАВЛЕНО: Путь изменен на /matchmaking/quick
   async startMatchmaking() {
     return await this.request('/matchmaking/quick', {
       method: 'POST',
@@ -158,7 +173,6 @@ class ApiClient {
     })
   }
 
-  // ИСПРАВЛЕНО: Теперь принимает gameId, метод изменен на POST, путь на /games/{gameId}/ships
   async placeShips(gameId, ships) {
     if (!gameId) {
       throw new Error("Невозможно отправить корабли: отсутствует gameId")
@@ -166,6 +180,25 @@ class ApiClient {
     return await this.request(`/games/${gameId}/ships`, {
       method: 'POST',
       body: JSON.stringify({ ships }),
+    })
+  }
+
+  async shipsReset(gameId) {
+    return await this.request(`/games/${gameId}/ships/reset`, {
+      method: 'POST',
+    })
+  }
+
+  async shipsConfirm(gameId) {
+    return await this.request(`/games/${gameId}/ships/confirm`, {
+      method: 'POST',
+    })
+  }
+
+  async makeMove(gameId, x, y) {
+    return await this.request(`/games/${gameId}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ x, y }),
     })
   }
 
@@ -181,7 +214,6 @@ class ApiClient {
     })
   }
 
-  // Profile endpoints
   async getProfile() {
     return await this.request('/profile', {
       method: 'GET',
