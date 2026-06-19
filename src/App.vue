@@ -35,15 +35,21 @@
 
     <div v-else-if="isAuthorized && !isGameStarted" class="relative z-10 w-full max-w-xl p-4 animate-fade-in">
       <Lobby 
+        v-if="!showLeaderboard && !showProfile"
         :username="currentUsername" 
         @game-ready="startGameSession" 
         @logout="logout"
+        @show-leaderboard="showLeaderboard = true"
+        @show-profile="showProfile = true"
       />
+      <Leaderboard v-else-if="showLeaderboard" @close="showLeaderboard = false" />
+      <Profile v-else @close="showProfile = false" @username-changed="(name) => currentUsername = name" />
     </div>
 
     <GameBoard 
       v-else 
       :gameId="activeGameId"
+      :isLobbyWait="isLobbyWait"
       @back-to-menu="isGameStarted = false"
     />
 
@@ -55,6 +61,8 @@ import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import AuthForm from './components/AuthForm.vue'
 import Lobby from './components/Lobby.vue' 
 import GameBoard from './components/GameBoard.vue' 
+import Leaderboard from './components/Leaderboard.vue'
+import Profile from './components/Profile.vue'
 import { apiClient } from './api/client' // Импортируем исправленный клиент
 import Hls from 'hls.js'
 
@@ -63,6 +71,9 @@ const activeGameId = ref('')
 const isStartScreen = ref(true)
 const isAuthorized = ref(!!localStorage.getItem('token')) // ИСПРАВЛЕНО: Проверка по ключу 'token'
 const isGameStarted = ref(false)
+const isLobbyWait = ref(false)
+const showLeaderboard = ref(false)
+const showProfile = ref(false)
 const currentUsername = ref(localStorage.getItem('username') || 'CyberCommander')
 
 const videoRef = ref(null)
@@ -84,19 +95,26 @@ const logout = () => {
   localStorage.removeItem('username')
   isAuthorized.value = false
   isGameStarted.value = false
+  showLeaderboard.value = false
+  showProfile.value = false
   isStartScreen.value = true
 }
 
 // Вызывается из Лобби при клике на кнопку «НАЧАТЬ ПОИСК СОПЕРНИКА»
-const startGameSession = async () => {
+const startGameSession = async (gameId) => {
   try {
-    activeGameId.value = '' // Сбрасываем старый ID перед началом новой сессии
-    
-    // ИСПРАВЛЕНО: Делаем запрос на быстрый поиск матча через apiClient (POST /api/matchmaking/quick)
-    await apiClient.startMatchmaking()
-    
+    if (gameId && gameId !== 'LOBBY_WAIT') {
+      activeGameId.value = gameId
+      isLobbyWait.value = false
+      isGameStarted.value = true
+      return
+    }
+    activeGameId.value = ''
+    isLobbyWait.value = gameId === 'LOBBY_WAIT'
+    if (!isLobbyWait.value) {
+      await apiClient.startMatchmaking()
+    }
     isGameStarted.value = true
-    console.log("🚀 Поиск запущен на бэкенде. Переходим в GameBoard для подсоединения к веб-сокету.")
   } catch (err) {
     console.error(err)
     alert(`Ошибка старта поиска матча: ${err.message || 'Не удалось связаться с сервером'}`)

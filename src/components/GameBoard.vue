@@ -29,43 +29,75 @@
         <p class="font-mono text-xs text-gray-500">Автоматически через 5 секунд...</p>
       </div>
 
-      <div v-if="notificationMessage" class="w-full max-w-4xl bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-3 text-center shadow-md font-mono text-xs font-bold uppercase tracking-wider animate-scale-pop"
-            :class="notificationType === 'error' ? 'text-red-700 border-red-500 bg-red-50' : 'text-green-700 border-green-500 bg-green-50'">
-        {{ notificationMessage }}
+      <div class="w-full max-w-4xl min-h-[3rem] flex items-stretch">
+        <div v-if="notificationMessage" class="w-full bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-3 text-center shadow-md font-mono text-xs font-bold uppercase tracking-wider animate-scale-pop"
+              :class="notificationType === 'error' ? 'text-red-700 border-red-500 bg-red-50' : 'text-green-700 border-green-500 bg-green-50'">
+          {{ notificationMessage }}
+        </div>
       </div>
 
       <div class="flex flex-col xl:flex-row gap-8 w-full justify-center items-stretch">
         
-        <div class="w-full xl:w-[240px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-4 text-black flex flex-col shadow-sm">
-          <h2 class="text-xl font-faero mb-3 text-center border-b-2 border-gray-400 pb-2 tracking-wide">SHIP DOCK</h2>
-          
-          <div class="text-[10px] font-mono mb-3 text-center text-gray-600 bg-gray-200 p-2 border border-gray-400">
-            <template v-if="gameState === 'placement'">
-              <p class="font-bold text-blue-800">⚓ Расстановка:</p>
-              <p>Тащите корабль из дока на поле, либо берите прямо с поля!</p>
-              <p class="font-bold text-emerald-800 mt-1">🔄 Поворот:</p>
-              <p>Кликните по кораблю на поле для поворота.</p>
-            </template>
-            <template v-else>
-              <p class="text-red-700 font-bold">ИГРА АКТИВНА</p>
-              <p class="text-xs mt-1">Следите за индикатором хода сверху.</p>
-            </template>
-          </div>
-          
-          <div class="flex flex-wrap xl:flex-col gap-4 justify-center items-center overflow-y-auto flex-grow max-h-[450px] p-2 bg-gray-300/50 border border-inset border-gray-400">
-            <template v-for="ship in availableShips" :key="ship.id">
-              <div 
-                v-if="!ship.placed"
-                :draggable="gameState === 'placement'"
-                @dragstart="handleDragStart($event, ship, 'dock')"
-                class="border border-transparent bg-gray-600/20 relative overflow-hidden flex items-center justify-center transition-transform"
-                :class="gameState === 'placement' ? 'cursor-grab active:cursor-grabbing hover:brightness-110 hover:border-blue-500' : 'opacity-40'"
-                :style="getDockShipBoxStyle(ship)"
-              >
-                <img :src="getShipImage(ship.size, 'horizontal')" class="pointer-events-none w-full h-full object-fill" />
-              </div>
-            </template>
-          </div>
+        <div class="w-full xl:w-[340px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-4 text-black flex flex-col shadow-sm">
+          <template v-if="myStats && (gameState === 'player-turn' || gameState === 'enemy-turn' || gameState === 'waiting' || gameState === 'finished')">
+            <h2 class="text-lg font-faero mb-2 text-center border-b-2 border-gray-400 pb-1 tracking-wide">📊 {{ myUsername }}</h2>
+            <div class="text-[10px] font-mono space-y-1 bg-gray-200 p-2 border border-gray-400 flex-grow">
+              <div class="flex justify-between"><span>Игр:</span><span class="font-bold">{{ myStats.total_games }}</span></div>
+              <div class="flex justify-between"><span>Побед:</span><span class="font-bold text-green-700">{{ myStats.wins }}</span></div>
+              <div class="flex justify-between"><span>Поражений:</span><span class="font-bold text-red-700">{{ myStats.losses }}</span></div>
+              <div class="flex justify-between"><span>Потоплено:</span><span class="font-bold">{{ myStats.ships_sunk }}</span></div>
+              <div class="flex justify-between"><span>Выстрелов:</span><span class="font-bold">{{ myStats.total_shots }}</span></div>
+              <div class="flex justify-between"><span>Попаданий:</span><span class="font-bold text-emerald-700">{{ myStats.hits }}</span></div>
+              <div class="border-t border-gray-400 my-1"></div>
+              <div class="flex justify-between"><span>% побед:</span><span class="font-bold">{{ (myStats.win_percentage || 0).toFixed(1) }}%</span></div>
+              <div class="flex justify-between"><span>% попаданий:</span><span class="font-bold">{{ (myStats.hit_percentage || 0).toFixed(1) }}%</span></div>
+              <div class="border-t border-gray-400 my-1"></div>
+              <div class="font-bold text-xs mb-1">Мои корабли:</div>
+              <div class="flex justify-between"><span>4-палубный:</span><span class="font-bold">{{ myShipsAlive[4] || 0 }}</span></div>
+              <div class="flex justify-between"><span>3-палубных:</span><span class="font-bold">{{ myShipsAlive[3] || 0 }}</span></div>
+              <div class="flex justify-between"><span>2-палубных:</span><span class="font-bold">{{ myShipsAlive[2] || 0 }}</span></div>
+              <div class="flex justify-between"><span>1-палубных:</span><span class="font-bold">{{ myShipsAlive[1] || 0 }}</span></div>
+            </div>
+          </template>
+          <template v-else>
+            <h2 class="text-xl font-faero mb-3 text-center border-b-2 border-gray-400 pb-2 tracking-wide">SHIP DOCK</h2>
+            
+             <div class="text-[10px] font-mono mb-3 text-center text-gray-600 bg-gray-200 p-2 border border-gray-400">
+              <template v-if="gameState === 'placement'">
+                <p class="font-bold text-blue-800">⚓ Расстановка:</p>
+                <p>Тащите корабль из дока на поле, либо тащите с поля на новое место!</p>
+                <p class="font-bold text-emerald-800 mt-1">🔄 Поворот:</p>
+                <p>Кликните по кораблю в доке или на поле.</p>
+                <button @click="randomizeFleet"
+                  class="mt-2 w-full py-1.5 text-xs font-faero text-black bg-gray-400 border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] hover:bg-gray-300 transition-colors tracking-wider"
+                >
+                  🎲 СЛУЧАЙНАЯ РАССТАНОВКА
+                </button>
+              </template>
+              <template v-else>
+                <p class="text-red-700 font-bold">ИГРА АКТИВНА</p>
+                <p class="text-xs mt-1">Следите за индикатором хода сверху.</p>
+              </template>
+            </div>
+            
+            <div class="flex flex-wrap gap-3 justify-center items-center overflow-y-auto flex-grow max-h-[450px] p-3 bg-gray-300/50 border border-inset border-gray-400">
+              <template v-for="ship in availableShips" :key="ship.id">
+                <div 
+                  v-if="!ship.placed"
+                  :draggable="gameState === 'placement'"
+                  @dragstart="handleDragStart($event, ship, 'dock')"
+                  @dragend="handleDragEnd"
+                  @click="toggleDockShipDirection(ship)"
+                  @contextmenu.prevent="toggleDockShipDirection(ship)"
+                  class="border border-transparent bg-gray-600/20 relative overflow-hidden flex items-center justify-center transition-transform"
+                  :class="gameState === 'placement' ? 'cursor-grab active:cursor-grabbing hover:brightness-110 hover:border-blue-500' : 'opacity-40'"
+                  :style="getDockShipBoxStyle(ship)"
+                >
+                  <img :src="getShipImage(ship.size, ship.direction)" class="pointer-events-none w-full h-full object-fill" />
+                </div>
+              </template>
+            </div>
+          </template>
         </div>
 
         <div class="w-full max-w-[500px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-6 text-black shadow-md">
@@ -74,27 +106,27 @@
           <div class="w-full aspect-square border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] p-2 relative"
                :style="{ backgroundImage: `url(${water1Url})`, backgroundSize: 'cover', backgroundPosition: 'center' }">
             
-            <div class="absolute inset-2 z-20 pointer-events-none grid grid-cols-11 grid-rows-11">
-              <div></div>
-              <div v-for="i in 110" :key="'spacer-'+i"></div>
-              
-              <div 
-                v-for="ship in placedShips" 
-                :key="'placed-'+ship.id"
-                :draggable="gameState === 'placement'"
-                @dragstart="handleDragStart($event, ship, 'board')"
-                @click="handlePlacedShipClick(ship)"
-                @contextmenu.prevent="handlePlacedShipClick(ship)"
-                @dblclick="removeShipFromBoard(ship)"
-                class="absolute pointer-events-auto border border-white/40 shadow-md overflow-hidden bg-blue-950/20 transition-all duration-75"
-                :class="gameState === 'placement' ? 'cursor-grab active:cursor-grabbing hover:brightness-125 hover:scale-[1.02]' : 'cursor-default'"
-                :style="getPlacedShipStyle(ship)"
-              >
-                <img :src="getShipImage(ship.size, ship.direction)" class="pointer-events-none w-full h-full object-fill absolute inset-0" />
-              </div>
+            <div 
+              v-for="ship in placedShips" 
+              :key="'placed-'+ship.id"
+              :draggable="gameState === 'placement'"
+              @dragstart="handleDragStart($event, ship, 'board')"
+              @dragend="handleDragEnd"
+              @click="handlePlacedShipClick(ship)"
+              @contextmenu.prevent="handlePlacedShipClick(ship)"
+              @dblclick="removeShipFromBoard(ship)"
+               class="absolute border border-white/40 shadow-md overflow-hidden bg-blue-950/20 transition-all duration-75"
+              :class="[
+                gameState === 'placement' ? 'z-20 cursor-grab active:cursor-grabbing hover:brightness-125 hover:scale-[1.02] pointer-events-auto' : 'z-0 cursor-default pointer-events-none',
+                { 'pointer-events-none': isDragging }
+              ]"
+              :style="getPlacedShipStyle(ship)"
+            >
+              <img :src="getShipImage(ship.size, ship.direction)" class="pointer-events-none w-full h-full object-fill absolute inset-0" />
             </div>
 
-            <div class="relative z-10 w-full h-full grid grid-cols-11 grid-rows-11 text-center items-center text-sm font-bold text-white bg-blue-950/20">
+            <div class="relative z-10 w-full h-full grid grid-cols-11 grid-rows-11 text-center items-center text-sm font-bold text-white bg-blue-950/20"
+                 :class="gameState === 'placement' ? 'pointer-events-auto' : 'pointer-events-none'">
               <div></div>
               <div v-for="letter in letters" :key="letter">{{ letter }}</div>
               
@@ -113,6 +145,7 @@
                 >
                   <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'hit'" class="text-base z-30 filter drop-shadow animate-scale-pop">💥</span>
                   <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'miss'" class="text-xs z-30 text-cyan-300 font-mono">⭕</span>
+                  <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'destroyed'" class="text-base z-30 animate-scale-pop">💀</span>
                 </div>
               </template>
             </div>
@@ -145,10 +178,38 @@
                   
                   <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'hit'" class="text-base z-10 filter drop-shadow animate-scale-pop">💥</span>
                   <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'miss'" class="text-xs z-10 text-cyan-300 font-mono animate-fade-in">⭕</span>
+                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'destroyed'" class="text-base z-10 animate-scale-pop">💀</span>
                 </div>
               </template>
             </div>
           </div>
+        </div>
+
+        <div v-if="opponentStats && (gameState === 'player-turn' || gameState === 'enemy-turn' || gameState === 'waiting' || gameState === 'finished')" class="w-full xl:w-[240px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-4 text-black flex flex-col shadow-sm">
+          <h2 class="text-lg font-faero mb-2 text-center border-b-2 border-gray-400 pb-1 tracking-wide">📊 {{ opponentName || 'Соперник' }}</h2>
+          <div class="text-[10px] font-mono space-y-1 bg-gray-200 p-2 border border-gray-400 flex-grow">
+            <div class="flex justify-between"><span>Игр:</span><span class="font-bold">{{ opponentStats.total_games }}</span></div>
+            <div class="flex justify-between"><span>Побед:</span><span class="font-bold text-green-700">{{ opponentStats.wins }}</span></div>
+            <div class="flex justify-between"><span>Поражений:</span><span class="font-bold text-red-700">{{ opponentStats.losses }}</span></div>
+            <div class="flex justify-between"><span>Потоплено:</span><span class="font-bold">{{ opponentStats.ships_sunk }}</span></div>
+            <div class="flex justify-between"><span>Выстрелов:</span><span class="font-bold">{{ opponentStats.total_shots }}</span></div>
+            <div class="flex justify-between"><span>Попаданий:</span><span class="font-bold text-emerald-700">{{ opponentStats.hits }}</span></div>
+            <div class="border-t border-gray-400 my-1"></div>
+            <div class="flex justify-between"><span>% побед:</span><span class="font-bold">{{ (opponentStats.win_percentage || 0).toFixed(1) }}%</span></div>
+            <div class="flex justify-between"><span>% попаданий:</span><span class="font-bold">{{ (opponentStats.hit_percentage || 0).toFixed(1) }}%</span></div>
+            <div class="border-t border-gray-400 my-1"></div>
+            <div class="font-bold text-xs mb-1">Кораблей осталось:</div>
+            <div class="flex justify-between"><span>4-палубный:</span><span class="font-bold">{{ opponentShipsAlive[4] || 0 }}</span></div>
+            <div class="flex justify-between"><span>3-палубных:</span><span class="font-bold">{{ opponentShipsAlive[3] || 0 }}</span></div>
+            <div class="flex justify-between"><span>2-палубных:</span><span class="font-bold">{{ opponentShipsAlive[2] || 0 }}</span></div>
+            <div class="flex justify-between"><span>1-палубных:</span><span class="font-bold">{{ opponentShipsAlive[1] || 0 }}</span></div>
+          </div>
+          <button v-if="gameState === 'player-turn' || gameState === 'enemy-turn'"
+            @click="forfeitGame"
+            class="mt-2 w-full py-1 text-xs font-faero text-gray-600 bg-gray-300 border border-gray-400 hover:bg-gray-400 transition-colors tracking-wider"
+          >
+            Сдаться
+          </button>
         </div>
 
       </div>
@@ -161,6 +222,8 @@
           CONFIRM FLEET
         </button>
       </div>
+
+
 
     </div>
   </div>
@@ -187,7 +250,8 @@ import ship4hor from '../assets/images/ship4hor.jpeg'
 import ship4vert from '../assets/images/ship4vert.jpeg'
 
 const props = defineProps({
-  gameId: { type: String, default: '' } // Может быть пустым при поиске
+  gameId: { type: String, default: '' }, // Может быть пустым при поиске
+  isLobbyWait: { type: Boolean, default: false }
 })
 const emit = defineEmits(['back-to-menu'])
 
@@ -264,6 +328,9 @@ const availableShips = ref([
   { id: 10, size: 1, placed: false, row: null, col: null, direction: 'horizontal' },
 ])
 
+const myStats = ref(null)
+const opponentStats = ref(null)
+
 const draggedShip = ref(null)
 const dragSource = ref('dock') 
 const originalRow = ref(null)
@@ -271,9 +338,38 @@ const originalCol = ref(null)
 
 const activeHoverCells = ref([])
 const isHoverInvalid = ref(false)
+const isDragging = ref(false)
+const processedMovesCount = ref(0)
+const lastGameData = ref(null)
 
 const placedShips = computed(() => availableShips.value.filter(s => s.placed))
 const allShipsPlaced = computed(() => availableShips.value.every(s => s.placed))
+
+const computeShipsAlive = (ships, filterPlayerID) => {
+  if (!ships) return {}
+  const alive = {}
+  for (const ship of ships) {
+    if (ship.player_id !== filterPlayerID) continue
+    if (!ship.sunk) {
+      alive[ship.ship_type] = (alive[ship.ship_type] || 0) + 1
+    }
+  }
+  return alive
+}
+
+const myShipsAlive = computed(() => {
+  if (!lastGameData.value || !myPlayerID.value) return {}
+  return computeShipsAlive(lastGameData.value.ships, myPlayerID.value)
+})
+
+const opponentShipsAlive = computed(() => {
+  if (!lastGameData.value || !myPlayerID.value) return {}
+  const opponentID = lastGameData.value.player1_id === myPlayerID.value
+    ? lastGameData.value.player2_id
+    : lastGameData.value.player1_id
+  if (!opponentID) return {}
+  return computeShipsAlive(lastGameData.value.ships, opponentID)
+})
 
 const canUserShoot = computed(() => {
   return gameState.value === 'player-turn' && currentTurnPlayerID.value === myPlayerID.value
@@ -325,7 +421,7 @@ const initWebSocket = () => {
       switch (response.type) {
         case 'matchmaking_searching':
           gameState.value = 'searching'
-          triggerNotification('🔍 Поиск свободного соперника в сети...', 'success', null)
+          triggerNotification(props.isLobbyWait ? '📡 Ожидание второго игрока в лобби...' : '🔍 Поиск свободного соперника в сети...', 'success', null)
           break
 
         case 'match_found':
@@ -351,6 +447,10 @@ const initWebSocket = () => {
           break
 
         case 'game_started':
+          // игнорируем, если игра уже активна (было переподключение или запоздалое сообщение)
+          if (gameState.value !== 'placement' && gameState.value !== 'searching' && gameState.value !== 'waiting') {
+            break
+          }
           let gsData = response.data
           if (typeof gsData === 'string') {
             try { gsData = JSON.parse(gsData) } catch(e) { gsData = null }
@@ -376,7 +476,29 @@ const initWebSocket = () => {
             if (typeof md === 'string') { try { md = JSON.parse(md) } catch(e) { md = null } }
             if (md && typeof md.x === 'number' && typeof md.y === 'number') {
               const status = md.hit ? 'hit' : 'miss'
-              playerDefenseGrid.value[md.y][md.x] = status
+              if (playerDefenseGrid.value[md.y][md.x] !== 'destroyed') {
+                playerDefenseGrid.value[md.y][md.x] = status
+              }
+              if (md.ship_sunk && md.sunk_cells && md.sunk_cells.length) {
+                md.sunk_cells.forEach(([x, y]) => {
+                  playerDefenseGrid.value[y][x] = 'destroyed'
+                })
+                for (const [x, y] of md.sunk_cells) {
+                  for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                      const nr = y + dr
+                      const nc = x + dc
+                      if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10 && playerDefenseGrid.value[nr][nc] === 'none') {
+                        playerDefenseGrid.value[nr][nc] = 'miss'
+                      }
+                    }
+                  }
+                }
+              }
+              triggerNotification(
+                md.hit ? '💥 Попадание по вашему кораблю!' : '⭕ Промах!',
+                md.hit ? 'error' : 'success', 3000
+              )
             }
           }
           break
@@ -433,6 +555,8 @@ const processServerGameState = (game) => {
     return
   }
 
+  lastGameData.value = game
+
   const rawStatus = game.Status || game.status
 
   if (rawStatus === 'placing_ships') {
@@ -451,6 +575,11 @@ const processServerGameState = (game) => {
       triggerNotification('💥 ПОРАЖЕНИЕ. Ваш флот уничтожен.', 'error', null)
     }
     playAgainTimeout.value = setTimeout(() => goBackToMenu(), 5000)
+    return
+  }
+
+  const incomingMoves = game.Moves || game.moves || []
+  if (incomingMoves.length < processedMovesCount.value) {
     return
   }
 
@@ -491,6 +620,68 @@ const processServerGameState = (game) => {
         playerDefenseGrid.value[mY][mX] = cellStatus
       }
     })
+    processedMovesCount.value = incomingMoves.length
+  }
+
+  // Отмечаем сбитые корабли на обеих сетках
+  const shipsList = game.Ships || game.ships
+  if (shipsList && Array.isArray(shipsList)) {
+    const markSurroundingMisses = (shipCells, grid) => {
+      for (const cell of shipCells) {
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const nr = cell.y + dr
+            const nc = cell.x + dc
+            if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10) {
+              if (grid[nr][nc] === 'none' || grid[nr][nc]?.status === 'none') {
+                if (typeof grid[nr]?.[nc] === 'object') {
+                  grid[nr][nc].status = 'miss'
+                } else {
+                  grid[nr][nc] = 'miss'
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    shipsList.forEach(ship => {
+      const shipCells = ship.cells || ship.Cells || []
+      const shipPlayerId = ship.player_id || ship.PlayerID
+      const isSunk = ship.sunk || ship.Sunk
+
+      if (!isSunk) return
+
+      if (shipPlayerId === myPlayerID.value) {
+        shipCells.forEach(cell => {
+          const x = cell.x !== undefined ? cell.x : cell.X
+          const y = cell.y !== undefined ? cell.y : cell.Y
+          if (y >= 0 && y < 10 && x >= 0 && x < 10) {
+            playerDefenseGrid.value[y][x] = 'destroyed'
+          }
+        })
+        markSurroundingMisses(shipCells, playerDefenseGrid.value)
+      } else {
+        shipCells.forEach(cell => {
+          const x = cell.x !== undefined ? cell.x : cell.X
+          const y = cell.y !== undefined ? cell.y : cell.Y
+          if (y >= 0 && y < 10 && x >= 0 && x < 10) {
+            enemyAttackGrid.value[y][x].status = 'destroyed'
+          }
+        })
+        markSurroundingMisses(shipCells, enemyAttackGrid.value)
+      }
+    })
+  }
+
+  // Извлекаем статистику игроков из состояния игры
+  const p1Stats = game.player1_stats
+  const p2Stats = game.player2_stats
+  if (p1Stats && p2Stats) {
+    const isP1 = myPlayerID.value === (game.player1_id || game.Player1ID)
+    myStats.value = isP1 ? p1Stats : p2Stats
+    opponentStats.value = isP1 ? p2Stats : p1Stats
   }
 }
 
@@ -498,7 +689,6 @@ const processServerGameState = (game) => {
  * ОТПРАВКА КОРАБЛЕЙ ИСПОЛЬЗУЕТ СИНХРОНИЗИРОВАННЫЙ КЛИЕНТ И ТОКЕНЫ
  */
 const sendShipsToServer = async () => {
-  // Формируем массив кораблей строго по эталону структуры бэкенда
   const shipsArray = availableShips.value.map(ship => {
     const xCoord = typeof ship.col === 'number' ? ship.col : 0
     const yCoord = typeof ship.row === 'number' ? ship.row : 0
@@ -514,16 +704,17 @@ const sendShipsToServer = async () => {
   triggerNotification('🚀 Отправка диспозиции сил в штаб...', 'success', 3000)
 
   try {
-    // 1. ИСПРАВЛЕНО: Сохранение кораблей через apiClient с передачей динамического localGameId
+    const token = localStorage.getItem('token')
+    await fetch(`/api/games/${localGameId.value}/ships/reset`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+
     await apiClient.placeShips(localGameId.value, shipsArray)
 
-    // 2. ИСПРАВЛЕНО: Фиксация готовности (confirm) по новому URL и правильному токену
-    const token = localStorage.getItem('token')
-    const confirmResponse = await fetch(`https://team4.verstack.ru:30773/api/games/${localGameId.value}/ships/confirm`, {
+    const confirmResponse = await fetch(`/api/games/${localGameId.value}/ships/confirm`, {
       method: 'POST',
-      headers: { 
-        'Authorization': `Bearer ${token}` 
-      }
+      headers: { 'Authorization': `Bearer ${token}` }
     })
 
     if (!confirmResponse.ok) {
@@ -546,8 +737,8 @@ const handleEnemyCellShot = async (row, col) => {
   if (enemyAttackGrid.value[row][col].status !== 'none' || enemyAttackGrid.value[row][col].animating) return
   
   enemyAttackGrid.value[row][col].animating = true
-  const token = localStorage.getItem('token') // ИСПРАВЛЕНО: 'token' вместо 'auth_token'
-  const url = `https://team4.verstack.ru:30773/api/games/${localGameId.value}/move`
+  const token = localStorage.getItem('token')
+  const url = `/api/games/${localGameId.value}/move`
 
   try {
     const response = await fetch(url, {
@@ -569,7 +760,6 @@ const handleEnemyCellShot = async (row, col) => {
     const moves = gameStateResponse.Moves || gameStateResponse.moves || []
     const lastMove = moves.length > 0 ? moves[moves.length - 1] : null
     const isHit = lastMove ? (lastMove.hit || lastMove.Hit) : false
-    enemyAttackGrid.value[row][col].status = isHit ? 'hit' : 'miss'
     enemyAttackGrid.value[row][col].exploding = isHit
   } catch (err) {
     triggerNotification(`❌ Осечка орудия: ${err.message}`, 'error', 3000)
@@ -580,7 +770,7 @@ const handleEnemyCellShot = async (row, col) => {
 
 const getStatusMessage = computed(() => {
   switch (gameState.value) {
-    case 'searching': return '🔍 ПОИСК ИГРЫ: Ожидаем подключение соперника к дуэли...'
+    case 'searching': return props.isLobbyWait ? '📡 ОЖИДАНИЕ ВТОРОГО ИГРОКА В ЛОББИ...' : '🔍 ПОИСК ИГРЫ: Ожидаем подключение соперника к дуэли...'
     case 'placement': return '⚓ СТАДИЯ РАССТАНОВКИ ФЛОТА: Разместите 10 кораблей на левой сетке'
     case 'waiting': return '📡 ОЖИДАНИЕ: Соперник завершает расстановку сил...'
     case 'player-turn': return '💥 ВАШ ХОД! Сделайте выстрел по правому сектору врага'
@@ -639,6 +829,68 @@ const handlePlacedShipClick = (ship) => {
   }
 }
 
+const toggleDockShipDirection = (ship) => {
+  if (gameState.value !== 'placement') return
+  ship.direction = ship.direction === 'horizontal' ? 'vertical' : 'horizontal'
+}
+
+const randomizeFleet = () => {
+  if (gameState.value !== 'placement') return
+
+  const ships = availableShips.value
+  for (const s of ships) {
+    s.placed = false
+    s.row = null
+    s.col = null
+  }
+
+  const placed = []
+  for (const ship of ships) {
+    let ok = false
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const row = Math.floor(Math.random() * 10)
+      const col = Math.floor(Math.random() * 10)
+      const dir = Math.random() < 0.5 ? 'horizontal' : 'vertical'
+      if (dir === 'horizontal' && col + ship.size - 1 > 9) continue
+      if (dir === 'vertical' && row + ship.size - 1 > 9) continue
+      const newCells = []
+      for (let i = 0; i < ship.size; i++) {
+        newCells.push({ row: dir === 'vertical' ? row + i : row, col: dir === 'horizontal' ? col + i : col })
+      }
+      const conflict = placed.some(p => {
+        for (let i = 0; i < p.size; i++) {
+          const pr = p.direction === 'vertical' ? p.row + i : p.row
+          const pc = p.direction === 'horizontal' ? p.col + i : p.col
+          if (newCells.some(c => Math.abs(c.row - pr) <= 1 && Math.abs(c.col - pc) <= 1)) return true
+        }
+        return false
+      })
+      if (!conflict) {
+        ship.row = row
+        ship.col = col
+        ship.direction = dir
+        ship.placed = true
+        placed.push({ row, col, size: ship.size, direction: dir })
+        ok = true
+        break
+      }
+    }
+    if (!ok) {
+      triggerNotification(`❌ Не удалось разместить корабль ${ship.size}-го размера`, 'error', 3000)
+    }
+  }
+}
+
+const forfeitGame = async () => {
+  if (!localGameId.value) return
+  try {
+    await apiClient.forfeitGame(localGameId.value)
+    triggerNotification('⚪ Вы сдались. Игра завершена.', 'error', 5000)
+  } catch (err) {
+    triggerNotification(`❌ ${err.message}`, 'error', 3000)
+  }
+}
+
 const removeShipFromBoard = (ship) => { 
   if (gameState.value === 'placement') { 
     ship.placed = false
@@ -647,7 +899,12 @@ const removeShipFromBoard = (ship) => {
   } 
 }
 
-const getDockShipBoxStyle = (ship) => ({ width: `${ship.size * 32}px`, height: `32px` })
+const getDockShipBoxStyle = (ship) => {
+  if (ship.direction === 'vertical') {
+    return { width: `32px`, height: `${ship.size * 32}px` }
+  }
+  return { width: `${ship.size * 32}px`, height: `32px` }
+}
 
 const getPlacedShipStyle = (ship) => {
   const u = 100 / 11
@@ -656,20 +913,19 @@ const getPlacedShipStyle = (ship) => {
     top: ((ship.row + 1) * u) + '%',
     width: (ship.direction === 'horizontal' ? ship.size * u : u) + '%',
     height: (ship.direction === 'vertical' ? ship.size * u : u) + '%',
-    zIndex: 25
   }
 }
 
 const handleDragStart = (e, ship, source) => { 
   if (gameState.value !== 'placement') return 
   
+  isDragging.value = true
   draggedShip.value = ship
   dragSource.value = source 
 
   if (source === 'board') {
     originalRow.value = ship.row
     originalCol.value = ship.col
-    ship.placed = false 
   }
   
   e.dataTransfer.effectAllowed = 'move' 
@@ -708,12 +964,6 @@ const handleDrop = (row, col) => {
     }
   } else {
     if (dragSource.value === 'board') {
-      const s = availableShips.value.find(x => x.id === draggedShip.value.id)
-      if (s) {
-        s.row = originalRow.value
-        s.col = originalCol.value
-        s.placed = true
-      }
       triggerNotification('❌ Нельзя поставить сюда: позиция заблокирована или нарушает границы флота', 'error', 3000)
     } else {
       triggerNotification('❌ Неверная позиция для установки', 'error', 2000)
@@ -724,6 +974,13 @@ const handleDrop = (row, col) => {
   activeHoverCells.value = []
   originalRow.value = null
   originalCol.value = null
+  isDragging.value = false
+}
+
+const handleDragEnd = () => {
+  isDragging.value = false
+  draggedShip.value = null
+  activeHoverCells.value = []
 }
 
 const getRandomTop = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min

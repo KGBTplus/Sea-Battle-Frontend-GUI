@@ -5,9 +5,17 @@
       
       <div class="bg-[#000080] text-white p-1 px-2 flex justify-between items-center text-xs font-bold font-sans tracking-wide">
         <span>🛰️ BATTLE_LOBBY_EXPLORER.EXE</span>
-        <button @click="$emit('logout')" class="bg-[#d4d0c8] text-black border px-1.5 py-0.5 hover:bg-gray-200 active:border-inset text-[10px]">
-          LOGOUT
-        </button>
+        <div class="flex gap-1">
+          <button @click="$emit('show-profile')" class="bg-[#d4d0c8] text-black border px-1.5 py-0.5 hover:bg-gray-200 active:border-inset text-[10px]">
+            👤 ПРОФИЛЬ
+          </button>
+          <button @click="$emit('show-leaderboard')" class="bg-[#d4d0c8] text-black border px-1.5 py-0.5 hover:bg-gray-200 active:border-inset text-[10px]">
+            🏆 ЛИДЕРЫ
+          </button>
+          <button @click="$emit('logout')" class="bg-[#d4d0c8] text-black border px-1.5 py-0.5 hover:bg-gray-200 active:border-inset text-[10px]">
+            LOGOUT
+          </button>
+        </div>
       </div>
 
       <div class="p-3 bg-gray-100 border border-gray-400 my-3 text-xs leading-relaxed">
@@ -28,7 +36,8 @@
         </button>
         <button 
           @click="createNewLobby"
-          class="px-4 py-4 bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#000] border-r-[#000] active:border-t-[#000] active:border-l-[#000] active:border-b-[#fff] active:border-r-[#fff] font-bold text-sm tracking-wider hover:bg-gray-50 text-blue-800"
+          :disabled="creating"
+          class="px-4 py-4 bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#000] border-r-[#000] active:border-t-[#000] active:border-l-[#000] active:border-b-[#fff] active:border-r-[#fff] font-bold text-sm tracking-wider hover:bg-gray-50 text-blue-800 disabled:opacity-50"
         >
           ➕ СОЗДАТЬ ЛОББИ
         </button>
@@ -83,7 +92,7 @@ const props = defineProps({
   username: { type: String, default: 'CyberCommander' }
 })
 
-const emit = defineEmits(['game-ready', 'logout'])
+const emit = defineEmits(['game-ready', 'logout', 'show-leaderboard', 'show-profile'])
 const lobbyError = ref('')
 const lobbies = ref([])
 let lobbiesInterval = null
@@ -93,21 +102,30 @@ const startMatchmaking = () => {
   emit('game-ready', '')
 }
 
+const creating = ref(false)
 const createNewLobby = async () => {
+  if (creating.value) return
+  creating.value = true
   lobbyError.value = ''
   try {
     await apiClient.createLobby({ max_players: 2 })
-    emit('game-ready', '')
+    emit('game-ready', 'LOBBY_WAIT')
   } catch (err) {
     lobbyError.value = err.message || 'Ошибка создания лобби'
+  } finally {
+    creating.value = false
   }
 }
 
 const joinLobby = async (lobbyId) => {
   lobbyError.value = ''
   try {
-    await apiClient.joinLobby(lobbyId)
-    emit('game-ready', '')
+    const result = await apiClient.joinLobby(lobbyId)
+    if (result && result.game_id) {
+      emit('game-ready', result.game_id)
+    } else {
+      emit('game-ready', '')
+    }
   } catch (err) {
     lobbyError.value = err.message || 'Ошибка присоединения к лобби'
   }
@@ -116,14 +134,27 @@ const joinLobby = async (lobbyId) => {
 const fetchLobbies = async () => {
   try {
     lobbies.value = await apiClient.getLobbies()
+    const activeGames = await apiClient.getActiveGame()
+    if (activeGames && activeGames.length > 0) {
+      const game = activeGames[0]
+      emit('game-ready', game.id || '')
+    }
   } catch (err) {
     console.error('Ошибка загрузки лобби:', err)
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
+  try {
+    const activeGames = await apiClient.getActiveGame()
+    if (activeGames && activeGames.length > 0) {
+      const game = activeGames[0]
+      emit('game-ready', game.id || '')
+      return
+    }
+  } catch (_) {}
   fetchLobbies()
-  lobbiesInterval = setInterval(fetchLobbies, 5000)
+  lobbiesInterval = setInterval(fetchLobbies, 2000)
 })
 
 onUnmounted(() => {
