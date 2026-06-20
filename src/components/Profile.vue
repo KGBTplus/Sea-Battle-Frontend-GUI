@@ -47,6 +47,32 @@
             <span class="font-bold">{{ profile.hits }}</span>
             <span class="text-gray-600">% попаданий:</span>
             <span class="font-bold">{{ formatPct(profile.hit_percentage) }}</span>
+            <div class="border-t border-gray-400 my-1 col-span-2"></div>
+            <span class="text-gray-600">💰 Монет:</span>
+            <span class="font-bold">{{ profile.coins ?? 0 }}</span>
+            <span class="text-gray-600">💸 Потрачено:</span>
+            <span class="font-bold text-red-700">{{ profile.total_spent ?? 0 }}</span>
+            <span class="text-gray-600">📈 Заработано:</span>
+            <span class="font-bold text-green-700">{{ profile.total_earned ?? 0 }}</span>
+          </div>
+        </div>
+
+        <!-- Настройки звука -->
+        <div class="bg-gray-100 border border-gray-400 p-3 mb-3 text-sm">
+          <h2 class="font-bold text-blue-900 mb-2">Настройки звука</h2>
+          <div class="flex items-center gap-3">
+            <span class="text-gray-600 text-lg">🔇</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="1"
+              :value="volumePct"
+              @input="onVolumeInput"
+              class="flex-1 h-2 accent-blue-700 cursor-pointer"
+            />
+            <span class="text-gray-600 text-lg">🔊</span>
+            <span class="w-10 text-right font-bold text-xs">{{ volumePct }}%</span>
           </div>
         </div>
 
@@ -206,6 +232,16 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { apiClient } from '../api/client'
+import { useAudio } from '../composables/useAudio'
+
+const { volume, setVolume } = useAudio()
+const volumePct = ref(Math.round(volume.value * 100))
+
+const onVolumeInput = (e) => {
+  const v = parseInt(e.target.value, 10)
+  volumePct.value = v
+  setVolume(v / 100)
+}
 
 const emit = defineEmits(['close', 'username-changed'])
 

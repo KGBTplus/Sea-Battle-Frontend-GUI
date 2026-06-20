@@ -34,14 +34,18 @@
     </div>
 
     <div v-else-if="isAuthorized && !isGameStarted" class="relative z-10 w-full max-w-xl p-4 animate-fade-in">
-      <Lobby 
-        v-if="!showLeaderboard && !showProfile"
+      <Lobby
+        v-if="!showLeaderboard && !showProfile && !showShop && !showInventory"
         :username="currentUsername" 
         @game-ready="startGameSession" 
         @logout="logout"
         @show-leaderboard="showLeaderboard = true"
         @show-profile="showProfile = true"
+        @show-shop="showShop = true"
+        @show-inventory="showInventory = true"
       />
+      <Shop v-else-if="showShop" @close="showShop = false" @profile-updated="handleProfileUpdate" />
+      <Inventory v-else-if="showInventory" @close="showInventory = false" @profile-updated="handleProfileUpdate" />
       <Leaderboard v-else-if="showLeaderboard" @close="showLeaderboard = false" />
       <Profile v-else @close="showProfile = false" @username-changed="(name) => currentUsername = name" />
     </div>
@@ -54,6 +58,7 @@
       @back-to-menu="isGameStarted = false; isLobbyWait = false; currentLobbyId = ''"
     />
 
+    <AudioPlayer />
   </div>
 </template>
 
@@ -64,6 +69,9 @@ import Lobby from './components/Lobby.vue'
 import GameBoard from './components/GameBoard.vue' 
 import Leaderboard from './components/Leaderboard.vue'
 import Profile from './components/Profile.vue'
+import Shop from './components/Shop.vue'
+import Inventory from './components/Inventory.vue'
+import AudioPlayer from './components/AudioPlayer.vue'
 import { apiClient } from './api/client' // Импортируем исправленный клиент
 import Hls from 'hls.js'
 
@@ -76,6 +84,8 @@ const isLobbyWait = ref(false)
 const currentLobbyId = ref('')
 const showLeaderboard = ref(false)
 const showProfile = ref(false)
+const showShop = ref(false)
+const showInventory = ref(false)
 const currentUsername = ref('CyberCommander')
 
 const videoRef = ref(null)
@@ -92,6 +102,10 @@ const handleLoginSuccess = () => {
   isAuthorized.value = true
 }
 
+const handleProfileUpdate = (data) => {
+  // Profile was updated (shop/inventory changed); nothing to sync at app level
+}
+
 const logout = async () => {
   try {
     await apiClient.logout()
@@ -104,6 +118,8 @@ const logout = async () => {
   currentLobbyId.value = ''
   showLeaderboard.value = false
   showProfile.value = false
+  showShop.value = false
+  showInventory.value = false
   isStartScreen.value = true
 }
 
@@ -125,13 +141,10 @@ const startGameSession = async (gameId) => {
       isGameStarted.value = true
       return
     }
-    activeGameId.value = ''
-    currentLobbyId.value = ''
-    isLobbyWait.value = gameId === 'LOBBY_WAIT'
-    if (!isLobbyWait.value) {
-      await apiClient.startMatchmaking()
-    }
-    isGameStarted.value = true
+	activeGameId.value = ''
+	currentLobbyId.value = ''
+	isLobbyWait.value = gameId === 'LOBBY_WAIT'
+	isGameStarted.value = true
   } catch (err) {
     console.error(err)
     alert(`Ошибка старта поиска матча: ${err.message || 'Не удалось связаться с сервером'}`)

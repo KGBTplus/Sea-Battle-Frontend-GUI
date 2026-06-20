@@ -3,24 +3,22 @@
     
     <div class="w-full max-w-3xl bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-4 text-black font-mono shadow-[2px_2px_10px_rgba(0,0,0,0.5)] select-none">
       
-      <div class="bg-[#000080] text-white p-1 px-2 flex justify-between items-center text-xs font-bold font-sans tracking-wide">
-        <span>🛰️ BATTLE_LOBBY_EXPLORER.EXE</span>
-        <div class="flex gap-1">
-          <button @click="$emit('show-profile')" class="bg-[#d4d0c8] text-black border px-1.5 py-0.5 hover:bg-gray-200 active:border-inset text-[10px]">
-            👤 ПРОФИЛЬ
-          </button>
-          <button @click="$emit('show-leaderboard')" class="bg-[#d4d0c8] text-black border px-1.5 py-0.5 hover:bg-gray-200 active:border-inset text-[10px]">
-            🏆 ЛИДЕРЫ
-          </button>
-          <button @click="$emit('logout')" class="bg-[#d4d0c8] text-black border px-1.5 py-0.5 hover:bg-gray-200 active:border-inset text-[10px]">
-            LOGOUT
-          </button>
-        </div>
-      </div>
-
-      <div class="p-3 bg-gray-100 border border-gray-400 my-3 text-xs leading-relaxed">
-        <p class="font-bold text-blue-900">Командир: <span class="text-black bg-yellow-200 px-1">{{ username }}</span></p>
-        <p class="text-gray-600 mt-1">Система переведена на автоматический радарный матчмейкинг. Нажмите кнопку ниже для подключения к глобальной сети поиска соперника.</p>
+      <div class="flex flex-row flex-wrap items-center justify-center gap-1 py-1">
+        <button @click="$emit('show-inventory')" class="bg-[#d4d0c8] text-black border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] px-2 py-1 hover:bg-gray-200 active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-[10px] whitespace-nowrap font-bold">
+          🎒 ИНВЕНТАРЬ
+        </button>
+        <button @click="$emit('show-shop')" class="bg-[#d4d0c8] text-black border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] px-2 py-1 hover:bg-gray-200 active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-[10px] whitespace-nowrap font-bold">
+          🛒 МАГАЗИН
+        </button>
+        <button @click="$emit('show-leaderboard')" class="bg-[#d4d0c8] text-black border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] px-2 py-1 hover:bg-gray-200 active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-[10px] whitespace-nowrap font-bold">
+          🏆 ЛИДЕРЫ
+        </button>
+        <button @click="$emit('show-profile')" class="bg-[#d4d0c8] text-black border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] px-2 py-1 hover:bg-gray-200 active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-[10px] whitespace-nowrap font-bold">
+          👤 ПРОФИЛЬ
+        </button>
+        <button @click="$emit('logout')" class="bg-[#d4d0c8] text-red-700 border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] px-2 py-1 hover:bg-gray-200 active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-[10px] whitespace-nowrap font-bold">
+          🚪 ВЫЙТИ
+        </button>
       </div>
 
       <div v-if="lobbyError" class="bg-red-100 border-2 border-red-600 text-red-800 p-2 text-xs font-bold mb-3 uppercase tracking-tight">
@@ -41,6 +39,17 @@
         >
           ➕ СОЗДАТЬ ЛОББИ
         </button>
+      </div>
+
+      <!-- Статус лобби / поиска -->
+      <div v-if="myLobbyId" class="bg-gray-100 border border-gray-400 p-2 mb-2 text-xs">
+        <div class="font-bold text-blue-900 mb-1">📡 ЛОББИ {{ myLobbyId.slice(0, 8) }}...</div>
+        <div v-if="myLobbyOpponent" class="text-green-700">
+          👥 Соперник: <span class="font-bold">{{ myLobbyOpponent }}</span>
+        </div>
+        <div v-else class="text-gray-500">
+          ⏳ Ожидание игрока...
+        </div>
       </div>
       
     </div>
@@ -95,10 +104,25 @@ const props = defineProps({
 const emit = defineEmits(['game-ready', 'logout', 'show-leaderboard', 'show-profile'])
 const lobbyError = ref('')
 const lobbies = ref([])
+const myLobbyId = ref('')
+const myLobbyOpponent = ref('')
 let lobbiesInterval = null
 
-const startMatchmaking = () => {
+const startMatchmaking = async () => {
   lobbyError.value = ''
+  myLobbyId.value = ''
+  myLobbyOpponent.value = ''
+  console.log('[LOBBY] startMatchmaking called')
+  try {
+    const result = await apiClient.startMatchmaking()
+    console.log('[LOBBY] startMatchmaking result:', result)
+    if (result?.game_id) {
+      emit('game-ready', result.game_id)
+      return
+    }
+  } catch (err) {
+    console.warn('[LOBBY] startMatchmaking error:', err)
+  }
   emit('game-ready', '')
 }
 
@@ -107,11 +131,23 @@ const createNewLobby = async () => {
   if (creating.value) return
   creating.value = true
   lobbyError.value = ''
+  myLobbyId.value = ''
+  myLobbyOpponent.value = ''
+  console.log('[LOBBY] createNewLobby called')
   try {
     const result = await apiClient.createLobby({ max_players: 2 })
-    emit('game-ready', result?.id ? 'LOBBY_' + result.id : 'LOBBY_WAIT')
+    console.log('[LOBBY] createNewLobby result:', result)
+    if (result?.game_id) {
+      emit('game-ready', result.game_id)
+    } else if (result?.id) {
+      myLobbyId.value = result.id
+      emit('game-ready', 'LOBBY_' + result.id)
+    } else {
+      emit('game-ready', 'LOBBY_WAIT')
+    }
   } catch (err) {
     lobbyError.value = err.message || 'Ошибка создания лобби'
+    console.warn('[LOBBY] createNewLobby error:', err)
   } finally {
     creating.value = false
   }
@@ -134,13 +170,29 @@ const joinLobby = async (lobbyId) => {
 const fetchLobbies = async () => {
   try {
     lobbies.value = await apiClient.getLobbies()
+    console.log('[LOBBY] fetched lobbies:', lobbies.value.length)
+    // Check if my lobby has an opponent
+    if (myLobbyId.value) {
+      const myLobby = lobbies.value.find(l => l.id === myLobbyId.value)
+      if (myLobby && myLobby.usernames && myLobby.usernames.length >= 2) {
+        const myUsername = localStorage.getItem('username') || ''
+        const opponent = myLobby.usernames.find(u => u !== myUsername)
+        if (opponent) {
+          myLobbyOpponent.value = opponent
+          console.log('[LOBBY] opponent found in lobby:', opponent)
+        }
+      } else if (myLobby && myLobby.usernames && myLobby.usernames.length === 1) {
+        console.log('[LOBBY] waiting for opponent, usernames:', myLobby.usernames)
+      }
+    }
     const activeGames = await apiClient.getActiveGame()
     if (activeGames && activeGames.length > 0) {
       const game = activeGames[0]
+      console.log('[LOBBY] active game found:', game.id)
       emit('game-ready', game.id || '')
     }
   } catch (err) {
-    console.error('Ошибка загрузки лобби:', err)
+    console.error('[LOBBY] Ошибка загрузки лобби:', err)
   }
 }
 

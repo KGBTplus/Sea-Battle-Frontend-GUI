@@ -173,6 +173,12 @@ class ApiClient {
     })
   }
 
+  async leaveMatchmaking() {
+    return await this.request('/matchmaking/quick', {
+      method: 'DELETE',
+    })
+  }
+
   async placeShips(gameId, ships) {
     if (!gameId) {
       throw new Error("Невозможно отправить корабли: отсутствует gameId")
@@ -270,6 +276,31 @@ class ApiClient {
   async disable2FA() {
     return await this.request('/auth/2fa/disable', {
       method: 'POST',
+    })
+  }
+
+  async getShop() {
+    return await this.request('/shop', { method: 'GET' })
+  }
+
+  async buyFish(fishId) {
+    return await this.request('/buy_fish', {
+      method: 'POST',
+      body: JSON.stringify({ fishId }),
+    })
+  }
+
+  async equipFish(fishIds) {
+    return await this.request('/equip_fish', {
+      method: 'POST',
+      body: JSON.stringify({ fishIds }),
+    })
+  }
+
+  async claimGameResult(result, hits, perfectWin) {
+    return await this.request('/game_result', {
+      method: 'POST',
+      body: JSON.stringify({ result, hits, perfectWin }),
     })
   }
 }

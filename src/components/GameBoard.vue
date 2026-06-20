@@ -36,11 +36,23 @@
       </div>
 
       <div v-if="gameState === 'finished'" class="w-full max-w-4xl flex flex-col items-center gap-3">
-        <button @click="goBackToMenu"
-          class="bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] px-8 py-3 font-faero text-lg text-black tracking-wider cursor-pointer hover:brightness-110 active:brightness-95 shadow-md transition-all">
-          🎮 PLAY AGAIN
-        </button>
-        <p class="font-mono text-xs text-gray-500">Автоматически через 5 секунд...</p>
+        <div class="w-full bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-4 text-center shadow-md">
+          <h2 class="text-2xl font-faero mb-2" :class="resultColorClass">{{ resultMessage }}</h2>
+          <p class="text-sm font-mono mb-3" :class="rewardColorClass">{{ rewardMessage }}</p>
+          <div class="flex flex-col items-center gap-2">
+            <button @click="toggleRevanch"
+              class="px-6 py-3 text-lg font-faero text-black bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#000] border-r-[#000] active:border-t-[#000] active:border-l-[#000] active:border-b-[#fff] active:border-r-[#fff] shadow-md hover:bg-gray-100 tracking-widest transition-all"
+              :class="{ 'btn--dimmed': isRevanchReady }">
+              {{ isRevanchReady ? '✔ ГОТОВ К РЕВАНШУ' : '⚔ ИГРАТЬ СНОВА' }}
+            </button>
+            <p v-if="revanchOpponentReady" class="text-xs font-mono text-green-700">Соперник готов к реваншу!</p>
+            <button @click="forceLeaveToLobby"
+              class="px-6 py-2 text-sm font-faero text-red-700 bg-gray-200 border border-red-400 hover:bg-red-100 active:bg-red-200 tracking-wider transition-colors">
+              🚪 ВЕРНУТЬСЯ В ЛОББИ
+            </button>
+          </div>
+          <p class="font-mono text-xs text-gray-500 mt-2">возвращение в лобби через {{ countdown }} сек...</p>
+        </div>
       </div>
 
       <div class="w-full max-w-4xl min-h-[3rem] flex items-stretch">
@@ -121,7 +133,7 @@
         <div class="w-full max-w-[500px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-6 text-black shadow-md">
           <h2 class="text-2xl font-faero mb-4 text-center border-b-2 border-gray-400 pb-2 tracking-wide">YOUR FLEET</h2>
           
-          <div class="w-full aspect-square border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] p-2 relative"
+          <div class="w-full aspect-square border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] p-2 relative overflow-hidden"
                :style="{ backgroundImage: `url(${water1Url})`, backgroundSize: 'cover', backgroundPosition: 'center' }">
             
             <div 
@@ -140,7 +152,7 @@
               ]"
               :style="getPlacedShipStyle(ship)"
             >
-              <img :src="getShipImage(ship.size, ship.direction)" class="pointer-events-none w-full h-full object-fill absolute inset-0" />
+              <img :src="getShipImage(ship.size, ship.direction)" class="pointer-events-none w-full h-full object-contain absolute inset-0" />
             </div>
 
             <div class="relative z-10 w-full h-full grid grid-cols-11 grid-rows-11 text-center items-center text-sm font-bold text-white bg-blue-950/20"
@@ -149,21 +161,21 @@
               <div v-for="letter in letters" :key="letter">{{ letter }}</div>
               
               <template v-for="rowIdx in 10" :key="rowIdx">
-                <div class="text-right pr-2 text-black font-mono bg-[#d4d0c8]/80 h-full flex items-center justify-end border-r border-gray-400">{{ rowIdx }}</div>
+                <div class="text-center text-[11px] leading-none font-bold font-mono text-white bg-[#0b2b5e] w-5 h-full flex items-center justify-center border-r border-blue-800">{{ rowIdx }}</div>
                 <div 
                   v-for="colIdx in 10" 
                   :key="colIdx"
                   class="w-full h-full aspect-square border border-white/10 relative flex items-center justify-center"
                   :class="{ 
-                    'bg-cyan-500/40': gameState === 'placement' && isCellHovered(rowIdx - 1, colIdx - 1), 
+                    'bg-green-500/40': gameState === 'placement' && isCellHovered(rowIdx - 1, colIdx - 1), 
                     'bg-red-500/50': gameState === 'placement' && isCellHoverInvalid(rowIdx - 1, colIdx - 1) 
                   }"
                   @dragover.prevent="handleDragOver(rowIdx - 1, colIdx - 1)"
                   @drop="handleDrop(rowIdx - 1, colIdx - 1)"
                 >
-                  <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'hit'" class="text-base z-30 filter drop-shadow animate-scale-pop">💥</span>
+                  <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'hit'" class="text-base z-30 filter drop-shadow animate-scale-pop text-red-500">⦻</span>
                   <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'miss'" class="text-xs z-30 text-cyan-300 font-mono">⭕</span>
-                  <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'destroyed'" class="text-base z-30 animate-scale-pop">💀</span>
+                  <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'destroyed'" class="text-base z-50 animate-scale-pop">💀</span>
                 </div>
               </template>
             </div>
@@ -183,7 +195,7 @@
               <div v-for="letter in letters" :key="letter">{{ letter }}</div>
               
               <template v-for="rowIdx in 10" :key="rowIdx">
-                <div class="text-right pr-2 text-black font-mono bg-[#d4d0c8]/80 h-full flex items-center justify-end border-r border-gray-400">{{ rowIdx }}</div>
+                <div class="text-center text-[11px] leading-none font-bold font-mono text-white bg-[#0b2b5e] w-5 h-full flex items-center justify-center border-r border-blue-800">{{ rowIdx }}</div>
                 <div 
                   v-for="colIdx in 10" 
                   :key="colIdx"
@@ -194,9 +206,9 @@
                   <div v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].animating" class="absolute inset-0 z-30 shot-laser-target"></div>
                   <div v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].exploding" class="absolute inset-0 z-40 explosion-flash"></div>
                   
-                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'hit'" class="text-base z-10 filter drop-shadow animate-scale-pop">💥</span>
-                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'miss'" class="text-xs z-10 text-cyan-300 font-mono animate-fade-in">⭕</span>
-                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'destroyed'" class="text-base z-10 animate-scale-pop">💀</span>
+                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'hit'" class="text-base z-30 filter drop-shadow animate-scale-pop">💥</span>
+                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'miss'" class="text-xs z-30 text-cyan-300 font-mono animate-fade-in">⭕</span>
+                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'destroyed'" class="text-base z-50 animate-scale-pop">💀</span>
                 </div>
               </template>
             </div>
@@ -224,7 +236,7 @@
           </div>
           <button v-if="gameState === 'player-turn' || gameState === 'enemy-turn'"
             @click="forfeitGame"
-            class="mt-2 w-full py-1 text-xs font-faero text-gray-600 bg-gray-300 border border-gray-400 hover:bg-gray-400 transition-colors tracking-wider"
+            class="mt-2 w-full py-1 text-xs font-faero text-red-700 bg-red-100 border border-red-300 hover:bg-red-200 transition-colors tracking-wider"
           >
             Сдаться
           </button>
@@ -235,21 +247,15 @@
       <div v-if="allShipsPlaced && gameState === 'placement'" class="w-full max-w-xs z-30 mt-4 flex flex-col items-center gap-3">
         <button 
           @click="toggleReady"
-          class="w-full py-4 text-xl font-faero text-black bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#000] border-r-[#000] active:border-t-[#000] active:border-l-[#000] active:border-b-[#fff] active:border-r-[#fff] shadow-md hover:bg-gray-100 tracking-widest"
+          :disabled="isSending"
+          class="w-full py-4 text-xl font-faero text-black bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#000] border-r-[#000] active:border-t-[#000] active:border-l-[#000] active:border-b-[#fff] active:border-r-[#fff] shadow-md hover:bg-gray-100 tracking-widest disabled:opacity-50 disabled:cursor-wait"
           :class="{ 'btn--dimmed': isReady }"
         >
           {{ isReady ? '✔ ГОТОВ' : '⚓ ГОТОВ' }}
         </button>
-        <button 
-          v-if="isReady"
-          @click="handleChangeLayout"
-          class="py-2 px-4 text-sm font-faero text-gray-700 bg-gray-300 border border-gray-400 hover:bg-gray-400 active:bg-gray-500 tracking-wider transition-colors"
-        >
-          ✏️ ИЗМЕНИТЬ РАССТАНОВКУ
-        </button>
       </div>
 
-      <div v-if="gameState === 'placement' || gameState === 'waiting' || (gameState === 'searching' && props.isLobbyWait)" class="w-full max-w-xs mt-2">
+      <div v-if="gameState === 'placement' || gameState === 'waiting' || gameState === 'searching'" class="w-full max-w-xs mt-2">
         <button @click="leaveLobby"
           class="w-full py-2 text-sm font-faero text-red-700 bg-gray-200 border border-red-400 hover:bg-red-100 active:bg-red-200 tracking-wider transition-colors"
         >
@@ -289,6 +295,21 @@ const props = defineProps({
 const emit = defineEmits(['back-to-menu'])
 
 const playAgainTimeout = ref(null)
+const countdown = ref(20)
+let countdownInterval = null
+
+const startCountdown = () => {
+  countdown.value = 20
+  if (countdownInterval) clearInterval(countdownInterval)
+  countdownInterval = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      clearInterval(countdownInterval)
+      countdownInterval = null
+      goBackToMenu()
+    }
+  }, 1000)
+}
 
 const handleGlobalKeydown = (e) => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
@@ -303,9 +324,31 @@ const goBackToMenu = () => {
     clearTimeout(playAgainTimeout.value)
     playAgainTimeout.value = null
   }
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
+  countdown.value = 20
   placementSecondsLeft.value = null
   turnSecondsLeft.value = null
+  isRevanchReady.value = false
+  revanchOpponentReady.value = false
+  gameReward.value = null
   emit('back-to-menu')
+}
+
+const toggleRevanch = () => {
+  isRevanchReady.value = !isRevanchReady.value
+  if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+    socket.value.send(JSON.stringify({ type: 'toggle_revanch' }))
+  }
+}
+
+const forceLeaveToLobby = () => {
+  if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+    socket.value.send(JSON.stringify({ type: 'force_leave_to_lobby' }))
+  }
+  goBackToMenu()
 }
 
 // Локальная копия ID игры, так как props изменять напрямую нельзя
@@ -335,6 +378,7 @@ const fish1Top = ref(20)
 const fish2Top = ref(70)
 const isFish1Active = ref(true)
 const isFish2Active = ref(true)
+const activeFish = ref([])
 
 // Статусы для матчмейкинга: 'searching', 'placement', 'waiting', 'player-turn', 'enemy-turn', 'finished'
 const gameState = ref('searching') 
@@ -345,6 +389,7 @@ const socket = ref(null)
 let pingInterval = null // Переменная для таймера Heartbeat
 
 const isReady = ref(false)
+const isSending = ref(false)
 
 const placementSecondsLeft = ref(null)
 const turnSecondsLeft = ref(null)
@@ -436,6 +481,14 @@ const isDragging = ref(false)
 const processedMovesCount = ref(0)
 const lastGameData = ref(null)
 
+// Revanch / game-over state
+const isRevanchReady = ref(false)
+const revanchOpponentReady = ref(false)
+const gameResult = ref('')
+const gameReward = ref(null)
+const perfectWin = ref(false)
+const playerHits = ref(0)
+
 const placedShips = computed(() => availableShips.value.filter(s => s.placed))
 const allShipsPlaced = computed(() => availableShips.value.every(s => s.placed))
 
@@ -469,6 +522,32 @@ const canUserShoot = computed(() => {
   return gameState.value === 'player-turn' && currentTurnPlayerID.value === myPlayerID.value
 })
 
+const resultMessage = computed(() => {
+  if (gameResult.value === 'draw') return '🤝 НИЧЬЯ!'
+  if (gameResult.value === 'win') return '🏆 ПОБЕДА!'
+  if (gameResult.value === 'lose') return '💥 ПОРАЖЕНИЕ'
+  return '🏁 ИГРА ЗАВЕРШЕНА'
+})
+
+const resultColorClass = computed(() => {
+  if (gameResult.value === 'win') return 'text-green-700'
+  if (gameResult.value === 'draw') return 'text-amber-700'
+  if (gameResult.value === 'lose') return 'text-red-700'
+  return 'text-gray-700'
+})
+
+const rewardMessage = computed(() => {
+  if (gameReward.value === null) return ''
+  const sign = gameReward.value >= 0 ? '+' : ''
+  const bonusText = perfectWin.value ? ' (идеальная победа!)' : ''
+  return `${sign}${gameReward.value} монет${bonusText}`
+})
+
+const rewardColorClass = computed(() => {
+  if (gameReward.value === null) return ''
+  return gameReward.value >= 0 ? 'text-green-600' : 'text-red-600'
+})
+
 const parseMyIDFromToken = () => {
   const uid = localStorage.getItem('user_id')
   if (uid) {
@@ -480,6 +559,7 @@ const parseMyIDFromToken = () => {
  * ИНИЦИАЛИЗАЦИЯ WEBSOCKET С УЧЕТОМ НОВОГО МАТЧМЕЙКИНГА И KEEP-ALIVE
  */
 const initWebSocket = () => {
+  console.log('[WS] Initializing WebSocket, gameState:', gameState.value, 'gameId:', localGameId.value)
   const token = apiClient.getWsToken() || ''
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   const wsUrl = `${protocol}//${window.location.host}/ws`
@@ -550,11 +630,18 @@ const initWebSocket = () => {
           break
 
         case 'your_turn':
-          if (myPlayerID.value) {
-            currentTurnPlayerID.value = myPlayerID.value
-            gameState.value = 'player-turn'
+          {
+            let ytData = response.data
+            if (typeof ytData === 'string') { try { ytData = JSON.parse(ytData) } catch(e) { ytData = null } }
+            const turnOwner = ytData ? (ytData.current_turn || ytData.CurrentTurn) : null
+            if (turnOwner) {
+              currentTurnPlayerID.value = turnOwner
+              gameState.value = (turnOwner === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
+              if (turnOwner === myPlayerID.value) {
+                triggerNotification('💥 Ваш ход!', 'success', 3000)
+              }
+            }
           }
-          triggerNotification('💥 Ваш ход!', 'success', 3000)
           break
 
         case 'opponent_moved':
@@ -599,14 +686,40 @@ const initWebSocket = () => {
             let gd = response.data
             if (typeof gd === 'string') { try { gd = JSON.parse(gd) } catch(e) { gd = null } }
             const winnerId = gd ? (gd.winner_id || gd.WinnerID) : null
-            if (winnerId === myPlayerID.value) {
+            const result = gd ? (gd.result || 'win') : 'win'
+            const reward1 = gd ? (gd.reward1 || 0) : 0
+            const reward2 = gd ? (gd.reward2 || 0) : 0
+            const hits1 = gd ? (gd.hits1 || 0) : 0
+            const hits2 = gd ? (gd.hits2 || 0) : 0
+            const perfect1 = gd ? (gd.perfect_win1 || false) : false
+            const perfect2 = gd ? (gd.perfect_win2 || false) : false
+
+            // Determine which reward is mine based on player ID
+            const p1ID = gd ? gd.player1_id : null
+            const isP1 = myPlayerID.value === p1ID || lastGameData.value?.player1_id === myPlayerID.value
+            const myReward = isP1 ? reward1 : reward2
+            const myHits = isP1 ? hits1 : hits2
+            const myPerfect = isP1 ? perfect1 : perfect2
+
+            gameReward.value = myReward
+            perfectWin.value = myPerfect
+            playerHits.value = myHits
+
+            if (result === 'draw') {
+              gameResult.value = 'draw'
+              triggerNotification('🤝 НИЧЬЯ! Оба флота уничтожены!', 'success', null)
+            } else if (winnerId === myPlayerID.value) {
+              gameResult.value = 'win'
               triggerNotification('🏆 ПОБЕДА! Вражеский флот полностью разгромлен!', 'success', null)
             } else {
+              gameResult.value = 'lose'
               triggerNotification('💥 ПОРАЖЕНИЕ. Ваш флот уничтожен.', 'error', null)
             }
             clearShipsPlacement()
             gameState.value = 'finished'
-            playAgainTimeout.value = setTimeout(() => goBackToMenu(), 5000)
+            isRevanchReady.value = false
+            revanchOpponentReady.value = false
+            startCountdown()
           }
           break
 
@@ -619,7 +732,12 @@ const initWebSocket = () => {
                 placementSecondsLeft.value = td.seconds_left
               } else if (td.timer_type === 'turn') {
                 turnSecondsLeft.value = td.seconds_left
+                if (td.current_turn) {
+                  currentTurnPlayerID.value = td.current_turn
+                }
                 currentTurnId.value = td.current_turn || null
+              } else if (td.timer_type === 'gameover') {
+                countdown.value = td.seconds_left
               }
             }
           }
@@ -652,6 +770,49 @@ const initWebSocket = () => {
             placementSecondsLeft.value = null
             turnSecondsLeft.value = null
             setTimeout(() => emit('back-to-menu'), 2000)
+          }
+          break
+
+        case 'revanch_toggle':
+          {
+            let rd = response.data
+            if (typeof rd === 'string') { try { rd = JSON.parse(rd) } catch(e) { rd = null } }
+            if (rd) {
+              const isP1 = lastGameData.value?.player1_id === myPlayerID.value
+              const opponentReady = isP1 ? rd.player2_ready : rd.player1_ready
+              revanchOpponentReady.value = !!opponentReady
+            }
+          }
+          break
+
+        case 'force_leave_to_lobby':
+          {
+            let fd = response.data
+            if (typeof fd === 'string') { try { fd = JSON.parse(fd) } catch(e) { fd = null } }
+            triggerNotification(fd?.message || '🚪 Возврат в лобби', 'success', 3000)
+            clearShipsPlacement()
+            placementSecondsLeft.value = null
+            turnSecondsLeft.value = null
+            goBackToMenu()
+          }
+          break
+
+        case 'revanch_game_start':
+          {
+            let rsd = response.data
+            if (typeof rsd === 'string') { try { rsd = JSON.parse(rsd) } catch(e) { rsd = null } }
+            if (rsd?.game_id) {
+              if (countdownInterval) {
+                clearInterval(countdownInterval)
+                countdownInterval = null
+              }
+              isRevanchReady.value = false
+              revanchOpponentReady.value = false
+              gameReward.value = null
+              gameState.value = 'searching'
+              localGameId.value = rsd.game_id
+              initWebSocket()
+            }
           }
           break
 
@@ -708,12 +869,14 @@ const processServerGameState = (game) => {
   if (rawStatus === 'finished') {
     gameState.value = 'finished'
     const winnerId = game.WinnerID || game.winner_id
-    if (winnerId === myPlayerID.value) {
+    if (!winnerId || winnerId === '00000000-0000-0000-0000-000000000000') {
+      triggerNotification('🤝 НИЧЬЯ! Оба флота уничтожены!', 'success', null)
+    } else if (winnerId === myPlayerID.value) {
       triggerNotification('🏆 ПОБЕДА! Вражеский флот полностью разгромлен!', 'success', null)
     } else {
       triggerNotification('💥 ПОРАЖЕНИЕ. Ваш флот уничтожен.', 'error', null)
     }
-    playAgainTimeout.value = setTimeout(() => goBackToMenu(), 5000)
+    startCountdown()
     return
   }
 
@@ -814,6 +977,37 @@ const processServerGameState = (game) => {
     })
   }
 
+  // Отмечаем потопленные корабли противника (из sunk_enemy_ships, передаётся broadcastGameState)
+  const sunkEnemyList = game.sunk_enemy_ships || game.SunkEnemyShips
+  if (sunkEnemyList && Array.isArray(sunkEnemyList)) {
+    sunkEnemyList.forEach(ship => {
+      const shipCells = ship.cells || ship.Cells || []
+      shipCells.forEach(cell => {
+        const x = cell.x !== undefined ? cell.x : cell.X
+        const y = cell.y !== undefined ? cell.y : cell.Y
+        if (y >= 0 && y < 10 && x >= 0 && x < 10) {
+          enemyAttackGrid.value[y][x].status = 'destroyed'
+        }
+      })
+      // Отмечаем промахи вокруг потопленного корабля
+      for (const cell of shipCells) {
+        const cx = cell.x !== undefined ? cell.x : cell.X
+        const cy = cell.y !== undefined ? cell.y : cell.Y
+        for (let dr = -1; dr <= 1; dr++) {
+          for (let dc = -1; dc <= 1; dc++) {
+            const nr = cy + dr
+            const nc = cx + dc
+            if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10) {
+              if (enemyAttackGrid.value[nr][nc].status === 'none') {
+                enemyAttackGrid.value[nr][nc].status = 'miss'
+              }
+            }
+          }
+        }
+      }
+    })
+  }
+
   // Извлекаем статистику игроков из состояния игры
   const p1Stats = game.player1_stats
   const p2Stats = game.player2_stats
@@ -827,8 +1021,8 @@ const processServerGameState = (game) => {
 /**
  * ОТПРАВКА КОРАБЛЕЙ ИСПОЛЬЗУЕТ СИНХРОНИЗИРОВАННЫЙ КЛИЕНТ И ТОКЕНЫ
  */
-const sendShipsToServer = async () => {
-  const shipsArray = availableShips.value.map(ship => {
+const getShipsArray = () => {
+  return availableShips.value.map(ship => {
     const xCoord = typeof ship.col === 'number' ? ship.col : 0
     const yCoord = typeof ship.row === 'number' ? ship.row : 0
     return {
@@ -838,64 +1032,35 @@ const sendShipsToServer = async () => {
       horizontal: ship.direction === 'horizontal'
     }
   })
-
-  gameState.value = 'waiting'
-  triggerNotification('🚀 Отправка диспозиции сил в штаб...', 'success', 3000)
-
-  try {
-    await apiClient.shipsReset(localGameId.value)
-    await apiClient.placeShips(localGameId.value, shipsArray)
-    await apiClient.shipsConfirm(localGameId.value)
-
-    triggerNotification('⚓ Флот зафиксирован. Ожидаем готовности оппонента...', 'success', 15000)
-  } catch (err) {
-    console.error(err)
-    gameState.value = 'placement'
-    triggerNotification(`❌ Отклонено штабом: ${err.message}`, 'error', 6000)
-  }
 }
 
-const handleReady = async () => {
-  if (isReady.value) return
-  const shipsArray = availableShips.value.map(ship => {
-    const xCoord = typeof ship.col === 'number' ? ship.col : 0
-    const yCoord = typeof ship.row === 'number' ? ship.row : 0
-    return {
-      ship_type: Number(ship.size),
-      start_x: xCoord,
-      start_y: yCoord,
-      horizontal: ship.direction === 'horizontal'
+const toggleReady = async () => {
+  if (isSending.value) return
+  if (isReady.value) {
+    try {
+      await apiClient.shipsReset(localGameId.value)
+      isReady.value = false
+      saveShipsPlacement()
+      triggerNotification('🔄 Готовность отменена', 'success', 3000)
+    } catch (err) {
+      triggerNotification(`❌ Ошибка: ${err.message}`, 'error', 3000)
     }
-  })
+    return
+  }
+  if (!allShipsPlaced.value) return
 
+  isSending.value = true
   try {
     await apiClient.shipsReset(localGameId.value)
-    await apiClient.placeShips(localGameId.value, shipsArray)
+    await apiClient.placeShips(localGameId.value, getShipsArray())
     await apiClient.shipsConfirm(localGameId.value)
     saveShipsPlacement()
     isReady.value = true
-    triggerNotification('⚓ Флот зафиксирован. Ожидаем готовности оппонента...', 'success', 15000)
+    triggerNotification('⚓ Флот зафиксирован. Ожидаем оппонента...', 'success', 15000)
   } catch (err) {
     triggerNotification(`❌ Ошибка: ${err.message}`, 'error', 6000)
-  }
-}
-
-const handleChangeLayout = async () => {
-  try {
-    await apiClient.shipsReset(localGameId.value)
-    isReady.value = false
-    triggerNotification('🔄 Расстановка разблокирована. Вы можете изменить позицию кораблей.', 'success', 3000)
-  } catch (err) {
-    triggerNotification(`❌ Ошибка: ${err.message}`, 'error', 3000)
-  }
-  saveShipsPlacement()
-}
-
-const toggleReady = () => {
-  if (isReady.value) {
-    handleChangeLayout()
-  } else if (allShipsPlaced.value) {
-    handleReady()
+  } finally {
+    isSending.value = false
   }
 }
 
@@ -1039,6 +1204,11 @@ const randomizeFleet = () => {
 }
 
 const leaveLobby = async () => {
+  try {
+    await apiClient.leaveMatchmaking()
+  } catch (e) {
+    console.warn('Failed to leave matchmaking queue:', e)
+  }
   if (props.lobbyId) {
     try {
       await apiClient.leaveLobby(props.lobbyId)
@@ -1164,11 +1334,44 @@ const getRandomTop = (min, max) => Math.floor(Math.random() * (max - min + 1)) +
 const resetFish1 = async () => { isFish1Active.value = false; fish1Top.value = getRandomTop(10, 42); await nextTick(); isFish1Active.value = true }
 const resetFish2 = async () => { isFish2Active.value = false; fish2Top.value = getRandomTop(55, 88); await nextTick(); isFish2Active.value = true }
 
-onMounted(() => {
+let lobbyPollInterval = null
+
+onMounted(async () => {
   parseMyIDFromToken()
   loadShipsPlacement()
   initWebSocket()
   document.addEventListener('keydown', handleGlobalKeydown)
+  try {
+    const profile = await apiClient.getProfile()
+    activeFish.value = profile.active_fish || []
+  } catch (_) {
+    // use default fish
+  }
+
+  // Poll for active games while searching (fallback if WS match_found is lost)
+  lobbyPollInterval = setInterval(async () => {
+    try {
+      const games = await apiClient.getActiveGame()
+      if (games && games.length > 0) {
+        const game = games[0]
+        if (game.id && game.id !== localGameId.value) {
+          localGameId.value = game.id
+          gameState.value = 'placement'
+          clearShipsPlacement()
+          triggerNotification('⚔️ Игра найдена! Переходим к расстановке флота.', 'success', 4000)
+        }
+      }
+    } catch (_) {}
+    // Also check HTTP matchmaking status for quick search
+    if (!props.isLobbyWait && gameState.value === 'searching') {
+      try {
+        const matchStatus = await apiClient.getMatchmakingStatus()
+        if (matchStatus && matchStatus.status !== 'searching') {
+          // not searching anymore — either found or errored
+        }
+      } catch (_) {}
+    }
+  }, 2000)
 })
 
 onUnmounted(() => {
@@ -1177,6 +1380,10 @@ onUnmounted(() => {
     clearTimeout(playAgainTimeout.value)
   }
   clearInterval(pingInterval)
+  if (lobbyPollInterval) {
+    clearInterval(lobbyPollInterval)
+    lobbyPollInterval = null
+  }
   placementSecondsLeft.value = null
   turnSecondsLeft.value = null
   if (socket.value) {

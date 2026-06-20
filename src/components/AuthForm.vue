@@ -206,7 +206,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { apiClient } from '../api/client'
 
 const username = ref('')
@@ -245,6 +245,8 @@ const resetToInitial = () => {
 }
 
 const loginSuccess = (usernameVal, userIdVal) => {
+  localStorage.removeItem('reg_in_progress')
+  localStorage.removeItem('reg_username')
   localStorage.setItem('username', usernameVal)
   if (userIdVal) {
     localStorage.setItem('user_id', userIdVal)
@@ -278,17 +280,26 @@ const handleCredentialsSubmit = async () => {
       response = await apiClient.register(username.value, email.value, password.value)
     }
 
+    console.log('[AUTH] response:', JSON.stringify(response))
+
     if (response.user_id) {
+      console.log('[AUTH] login success')
       loginSuccess(username.value, response.user_id)
-    } else if (response.message === 'Код отправлен на email') {
+    } else if (response.message && response.message.includes('Код отправлен')) {
+      console.log('[AUTH] code sent, transitioning to OTP')
+      localStorage.setItem('reg_in_progress', '1')
+      localStorage.setItem('reg_username', username.value)
       statusType.value = 'success'
       statusMessage.value = '📧 Код отправлен на email'
       setTimeout(() => {
         step.value = 'otp'
         statusMessage.value = ''
       }, 800)
+    } else {
+      console.log('[AUTH] unexpected response:', response)
     }
   } catch (err) {
+    console.log('[AUTH] error:', err.message)
     if (err.message?.includes('409') || err.message?.includes('already exists')) {
       statusType.value = 'error'
       statusMessage.value = '❌ Пользователь с таким именем или email уже существует'
@@ -314,14 +325,17 @@ const handleResendCode = async () => {
       response = await apiClient.register(username.value, email.value, password.value)
     }
 
+    console.log('[AUTH] resend response:', JSON.stringify(response))
+
     if (response.user_id) {
       loginSuccess(username.value, response.user_id)
-    } else if (response.message === 'Код отправлен на email') {
+    } else if (response.message && response.message.includes('Код отправлен')) {
       statusType.value = 'success'
       statusMessage.value = '📧 Код отправлен повторно'
       setTimeout(() => { statusMessage.value = '' }, 3000)
     }
   } catch (err) {
+    console.log('[AUTH] resend error:', err.message)
     statusType.value = 'error'
     statusMessage.value = `❌ ${err.message || 'Ошибка отправки кода'}`
   } finally {
@@ -362,6 +376,15 @@ const switchToForgotPassword = () => {
   showForgotConfirm.value = false
   handleForgotPasswordSendCode()
 }
+
+onMounted(() => {
+  if (localStorage.getItem('reg_in_progress') === '1') {
+    step.value = 'otp'
+    username.value = localStorage.getItem('reg_username') || ''
+    statusMessage.value = '📧 Введите код из письма'
+    statusType.value = 'success'
+  }
+})
 
 const handleForgotPasswordSendCode = async () => {
   if (isSubmitting.value) return
