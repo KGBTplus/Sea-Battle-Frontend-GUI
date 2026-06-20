@@ -108,8 +108,8 @@ const createNewLobby = async () => {
   creating.value = true
   lobbyError.value = ''
   try {
-    await apiClient.createLobby({ max_players: 2 })
-    emit('game-ready', 'LOBBY_WAIT')
+    const result = await apiClient.createLobby({ max_players: 2 })
+    emit('game-ready', result?.id ? 'LOBBY_' + result.id : 'LOBBY_WAIT')
   } catch (err) {
     lobbyError.value = err.message || 'Ошибка создания лобби'
   } finally {

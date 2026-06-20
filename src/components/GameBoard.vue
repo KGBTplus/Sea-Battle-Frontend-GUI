@@ -19,6 +19,20 @@
         <p v-if="opponentName && gameState !== 'searching' && gameState !== 'placement'" class="text-xs font-mono text-gray-600 mt-1">
           ⚔️ {{ opponentName }}
         </p>
+
+        <div v-if="placementSecondsLeft !== null && (gameState === 'placement' || gameState === 'waiting')" class="mt-2 font-mono text-sm font-bold"
+             :class="placementSecondsLeft <= 10 ? 'text-red-600 animate-pulse' : 'text-amber-700'">
+          ⏱ РАССТАНОВКА: {{ formatTime(placementSecondsLeft) }}
+        </div>
+
+        <div v-else-if="turnSecondsLeft !== null && (gameState === 'player-turn' || gameState === 'enemy-turn')" class="mt-2 flex justify-center gap-6 text-sm font-mono font-bold">
+          <span :class="myPlayerID === currentTurnId ? 'text-green-700' : 'text-gray-500'">
+            🎯 ВАШ ХОД: {{ myPlayerID === currentTurnId ? formatTime(turnSecondsLeft) : '—' }}
+          </span>
+          <span :class="myPlayerID !== currentTurnId ? 'text-red-700' : 'text-gray-500'">
+            🛡️ СОПЕРНИК: {{ myPlayerID !== currentTurnId ? formatTime(turnSecondsLeft) : '—' }}
+          </span>
+        </div>
       </div>
 
       <div v-if="gameState === 'finished'" class="w-full max-w-4xl flex flex-col items-center gap-3">
@@ -235,7 +249,13 @@
         </button>
       </div>
 
-
+      <div v-if="gameState === 'placement' || gameState === 'waiting' || (gameState === 'searching' && props.isLobbyWait)" class="w-full max-w-xs mt-2">
+        <button @click="leaveLobby"
+          class="w-full py-2 text-sm font-faero text-red-700 bg-gray-200 border border-red-400 hover:bg-red-100 active:bg-red-200 tracking-wider transition-colors"
+        >
+          🚪 ПОКИНУТЬ ИГРУ
+        </button>
+      </div>
 
     </div>
   </div>
@@ -262,8 +282,9 @@ import ship4hor from '../assets/images/ship4hor.jpeg'
 import ship4vert from '../assets/images/ship4vert.jpeg'
 
 const props = defineProps({
-  gameId: { type: String, default: '' }, // Может быть пустым при поиске
-  isLobbyWait: { type: Boolean, default: false }
+  gameId: { type: String, default: '' },
+  isLobbyWait: { type: Boolean, default: false },
+  lobbyId: { type: String, default: '' }
 })
 const emit = defineEmits(['back-to-menu'])
 
@@ -282,6 +303,8 @@ const goBackToMenu = () => {
     clearTimeout(playAgainTimeout.value)
     playAgainTimeout.value = null
   }
+  placementSecondsLeft.value = null
+  turnSecondsLeft.value = null
   emit('back-to-menu')
 }
 
@@ -322,6 +345,17 @@ const socket = ref(null)
 let pingInterval = null // Переменная для таймера Heartbeat
 
 const isReady = ref(false)
+
+const placementSecondsLeft = ref(null)
+const turnSecondsLeft = ref(null)
+const currentTurnId = ref(null)
+
+const formatTime = (seconds) => {
+  if (seconds === null || seconds === undefined) return '—'
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
 
 const SHIPS_STORAGE_KEY = 'placed_ships'
 
@@ -574,6 +608,57 @@ const initWebSocket = () => {
             gameState.value = 'finished'
             playAgainTimeout.value = setTimeout(() => goBackToMenu(), 5000)
           }
+          break
+
+        case 'timer_tick':
+          {
+            let td = response.data
+            if (typeof td === 'string') { try { td = JSON.parse(td) } catch(e) { td = null } }
+            if (td) {
+              if (td.timer_type === 'placement') {
+                placementSecondsLeft.value = td.seconds_left
+              } else if (td.timer_type === 'turn') {
+                turnSecondsLeft.value = td.seconds_left
+                currentTurnId.value = td.current_turn || null
+              }
+            }
+          }
+          break
+
+        case 'placement_auto_filled':
+          {
+            let pd = response.data
+            if (typeof pd === 'string') { try { pd = JSON.parse(pd) } catch(e) { pd = null } }
+            triggerNotification(pd?.message || '⏰ Время вышло! Корабли расставлены случайно.', 'error', 6000)
+            isReady.value = true
+          }
+          break
+
+        case 'turn_timeout':
+          {
+            let td = response.data
+            if (typeof td === 'string') { try { td = JSON.parse(td) } catch(e) { td = null } }
+            triggerNotification(td?.message || '⏰ Время вышло!', 'error', 4000)
+            turnSecondsLeft.value = null
+          }
+          break
+
+        case 'opponent_left':
+          {
+            let od = response.data
+            if (typeof od === 'string') { try { od = JSON.parse(od) } catch(e) { od = null } }
+            triggerNotification(od?.message || '👋 Соперник покинул игру', 'error', 8000)
+            clearShipsPlacement()
+            placementSecondsLeft.value = null
+            turnSecondsLeft.value = null
+            setTimeout(() => emit('back-to-menu'), 2000)
+          }
+          break
+
+        case 'left_lobby':
+          clearShipsPlacement()
+          placementSecondsLeft.value = null
+          turnSecondsLeft.value = null
           break
 
         case 'error':
@@ -953,6 +1038,24 @@ const randomizeFleet = () => {
   saveShipsPlacement()
 }
 
+const leaveLobby = async () => {
+  if (props.lobbyId) {
+    try {
+      await apiClient.leaveLobby(props.lobbyId)
+    } catch (e) {
+      console.warn('Failed to leave lobby via REST:', e)
+    }
+  }
+  if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+    socket.value.send(JSON.stringify({ type: 'leave_lobby' }))
+  }
+  clearShipsPlacement()
+  gameState.value = 'searching'
+  placementSecondsLeft.value = null
+  turnSecondsLeft.value = null
+  emit('back-to-menu')
+}
+
 const forfeitGame = async () => {
   if (!localGameId.value) return
   try {
@@ -1074,6 +1177,8 @@ onUnmounted(() => {
     clearTimeout(playAgainTimeout.value)
   }
   clearInterval(pingInterval)
+  placementSecondsLeft.value = null
+  turnSecondsLeft.value = null
   if (socket.value) {
     socket.value.close()
   }

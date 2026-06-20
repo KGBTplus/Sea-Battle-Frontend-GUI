@@ -50,7 +50,8 @@
       v-else 
       :gameId="activeGameId"
       :isLobbyWait="isLobbyWait"
-      @back-to-menu="isGameStarted = false"
+      :lobbyId="currentLobbyId"
+      @back-to-menu="isGameStarted = false; isLobbyWait = false; currentLobbyId = ''"
     />
 
   </div>
@@ -72,6 +73,7 @@ const isStartScreen = ref(true)
 const isAuthorized = ref(false)
 const isGameStarted = ref(false)
 const isLobbyWait = ref(false)
+const currentLobbyId = ref('')
 const showLeaderboard = ref(false)
 const showProfile = ref(false)
 const currentUsername = ref('CyberCommander')
@@ -98,6 +100,8 @@ const logout = async () => {
   localStorage.removeItem('user_id')
   isAuthorized.value = false
   isGameStarted.value = false
+  isLobbyWait.value = false
+  currentLobbyId.value = ''
   showLeaderboard.value = false
   showProfile.value = false
   isStartScreen.value = true
@@ -107,12 +111,22 @@ const logout = async () => {
 const startGameSession = async (gameId) => {
   try {
     if (gameId && gameId !== 'LOBBY_WAIT') {
+      // Check if it's a lobby wait with ID (LOBBY_<uuid>)
+      if (typeof gameId === 'string' && gameId.startsWith('LOBBY_')) {
+        currentLobbyId.value = gameId.replace('LOBBY_', '')
+        activeGameId.value = ''
+        isLobbyWait.value = true
+        isGameStarted.value = true
+        return
+      }
       activeGameId.value = gameId
+      currentLobbyId.value = ''
       isLobbyWait.value = false
       isGameStarted.value = true
       return
     }
     activeGameId.value = ''
+    currentLobbyId.value = ''
     isLobbyWait.value = gameId === 'LOBBY_WAIT'
     if (!isLobbyWait.value) {
       await apiClient.startMatchmaking()
