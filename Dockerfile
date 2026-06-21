@@ -20,9 +20,21 @@ FROM nginx:stable-alpine
 # Копируем скомпилированную статику из билдера в папку Nginx
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Включаем поддержку SPA роутинга (чтобы при перезагрузке страницы /game не было 404)
+# Включаем поддержку SPA роутинга + прокси на backend
 RUN echo 'server { \
     listen 80; \
+    location /api/ { \
+        proxy_pass http://backend:8080/api/; \
+        proxy_set_header Host $host; \
+        proxy_set_header X-Real-IP $remote_addr; \
+    } \
+    location /ws { \
+        proxy_pass http://backend:8080/ws; \
+        proxy_http_version 1.1; \
+        proxy_set_header Upgrade $http_upgrade; \
+        proxy_set_header Connection "upgrade"; \
+        proxy_set_header Host $host; \
+    } \
     location / { \
         root /usr/share/nginx/html; \
         index index.html index.htm; \

@@ -51,8 +51,16 @@ class ApiClient {
       }
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.error || error.message || 'Ошибка сервера')
+        const errorBody = await response.json().catch(() => ({}))
+        const safeMsg = {
+          400: 'Неверный запрос',
+          401: 'Требуется авторизация',
+          403: 'Доступ запрещён',
+          404: 'Ресурс не найден',
+          409: 'Конфликт данных',
+          429: 'Слишком много запросов',
+        }[response.status] || 'Ошибка сервера'
+        throw new Error(errorBody.error || errorBody.message || safeMsg)
       }
 
       return await response.json()
@@ -273,9 +281,10 @@ class ApiClient {
     })
   }
 
-  async disable2FA() {
+  async disable2FA(password) {
     return await this.request('/auth/2fa/disable', {
       method: 'POST',
+      body: JSON.stringify({ password }),
     })
   }
 
@@ -297,12 +306,10 @@ class ApiClient {
     })
   }
 
-  async claimGameResult(result, hits, perfectWin) {
-    return await this.request('/game_result', {
-      method: 'POST',
-      body: JSON.stringify({ result, hits, perfectWin }),
-    })
+  async getMatchHistory(page = 1, limit = 20) {
+    return await this.request(`/games/history?page=${page}&limit=${limit}`, { method: 'GET' })
   }
+
 }
 
 export const apiClient = new ApiClient()

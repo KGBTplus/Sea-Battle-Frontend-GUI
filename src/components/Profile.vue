@@ -19,7 +19,7 @@
         <div class="bg-gray-100 border border-gray-400 p-3 mb-3 text-sm">
           <div class="grid grid-cols-2 gap-y-2">
             <span class="text-gray-600">Игрок:</span>
-            <span class="font-bold">{{ profile.username }}</span>
+            <span class="font-bold" style="font-family: Tahoma, 'MS Sans Serif', Verdana, sans-serif;">{{ profile.username }}</span>
             <span class="text-gray-600">Email:</span>
             <span>{{ profile.email_masked }}</span>
             <span class="text-gray-600">Зарегистрирован:</span>
@@ -48,12 +48,14 @@
             <span class="text-gray-600">% попаданий:</span>
             <span class="font-bold">{{ formatPct(profile.hit_percentage) }}</span>
             <div class="border-t border-gray-400 my-1 col-span-2"></div>
-            <span class="text-gray-600">💰 Монет:</span>
+            <span class="text-gray-600">💰 Баланс:</span>
             <span class="font-bold">{{ profile.coins ?? 0 }}</span>
             <span class="text-gray-600">💸 Потрачено:</span>
             <span class="font-bold text-red-700">{{ profile.total_spent ?? 0 }}</span>
             <span class="text-gray-600">📈 Заработано:</span>
             <span class="font-bold text-green-700">{{ profile.total_earned ?? 0 }}</span>
+            <span class="text-gray-600">⏱ Время в бою:</span>
+            <span class="font-bold">{{ formatTime(profile.time_in_battle) }}</span>
           </div>
         </div>
 
@@ -132,13 +134,37 @@
           </div>
 
           <div v-else>
-            <button
-              @click="disable2FA"
-              :disabled="twoFaLoading"
-              class="px-3 py-1 bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-xs font-bold disabled:opacity-50"
-            >
-              Отключить 2FA
-            </button>
+            <template v-if="!twoFaDisableShowInput">
+              <button
+                @click="twoFaDisableShowInput = true"
+                class="px-3 py-1 bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-xs font-bold"
+              >
+                Отключить 2FA
+              </button>
+            </template>
+            <template v-else>
+              <div class="flex gap-2 items-center mt-1">
+                <input
+                  v-model="twoFaDisablePassword"
+                  type="password"
+                  placeholder="Текущий пароль"
+                  class="w-36 px-2 py-1 border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] bg-white text-xs outline-none"
+                />
+                <button
+                  @click="disable2FA"
+                  :disabled="twoFaLoading || !twoFaDisablePassword.trim()"
+                  class="px-3 py-1 bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-xs font-bold disabled:opacity-50"
+                >
+                  {{ twoFaLoading ? '...' : 'Подтвердить' }}
+                </button>
+                <button
+                  @click="twoFaDisableShowInput = false; twoFaDisablePassword = ''"
+                  class="px-2 py-1 text-[10px] text-gray-500 underline outline-none"
+                >
+                  Отмена
+                </button>
+              </div>
+            </template>
           </div>
 
           <p v-if="twoFaError" class="text-red-600 text-xs mt-1">{{ twoFaError }}</p>
@@ -258,6 +284,8 @@ const twoFaCode = ref('')
 const twoFaLoading = ref(false)
 const twoFaError = ref('')
 const twoFaSuccess = ref('')
+const twoFaDisableShowInput = ref(false)
+const twoFaDisablePassword = ref('')
 
 const pwFormVisible = ref(false)
 const pwOldPassword = ref('')
@@ -273,6 +301,14 @@ const showPwConfirm = ref(false)
 const formatPct = (v) => {
   if (v == null) return '—'
   return Math.round(v) + '%'
+}
+
+const formatTime = (seconds) => {
+  if (seconds == null || seconds === 0) return '0 мин'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  if (h > 0) return `${h} ч ${m} мин`
+  return `${m} мин`
 }
 
 const formatDate = (d) => {
@@ -356,9 +392,11 @@ const disable2FA = async () => {
   twoFaError.value = ''
   twoFaSuccess.value = ''
   try {
-    await apiClient.disable2FA()
+    await apiClient.disable2FA(twoFaDisablePassword.value)
     profile.value.otp_enabled = false
     twoFaSuccess.value = '2FA отключена'
+    twoFaDisableShowInput.value = false
+    twoFaDisablePassword.value = ''
   } catch (e) {
     twoFaError.value = e.message || 'Ошибка'
   } finally {

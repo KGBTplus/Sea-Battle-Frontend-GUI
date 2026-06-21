@@ -16,10 +16,6 @@
         <h3 class="text-lg font-bold font-mono tracking-wide" :class="getStatusColorClass">
           {{ getStatusMessage }}
         </h3>
-        <p v-if="opponentName && gameState !== 'searching' && gameState !== 'placement'" class="text-xs font-mono text-gray-600 mt-1">
-          ⚔️ {{ opponentName }}
-        </p>
-
         <div v-if="placementSecondsLeft !== null && (gameState === 'placement' || gameState === 'waiting')" class="mt-2 font-mono text-sm font-bold"
              :class="placementSecondsLeft <= 10 ? 'text-red-600 animate-pulse' : 'text-amber-700'">
           ⏱ РАССТАНОВКА: {{ formatTime(placementSecondsLeft) }}
@@ -66,19 +62,14 @@
         
         <div class="w-full xl:w-[340px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-4 text-black flex flex-col shadow-sm">
           <template v-if="myStats && (gameState === 'player-turn' || gameState === 'enemy-turn' || gameState === 'waiting' || gameState === 'finished')">
-            <h2 class="text-lg font-faero mb-2 text-center border-b-2 border-gray-400 pb-1 tracking-wide">📊 {{ myUsername }}</h2>
+            <h2 class="text-lg mb-2 text-center border-b-2 border-gray-400 pb-1 tracking-wide"
+              style="font-family: Tahoma, 'MS Sans Serif', Verdana, sans-serif;">📊 {{ myUsername }}</h2>
             <div class="text-[10px] font-mono space-y-1 bg-gray-200 p-2 border border-gray-400 flex-grow">
               <div class="flex justify-between"><span>Игр:</span><span class="font-bold">{{ myStats.total_games }}</span></div>
-              <div class="flex justify-between"><span>Побед:</span><span class="font-bold text-green-700">{{ myStats.wins }}</span></div>
-              <div class="flex justify-between"><span>Поражений:</span><span class="font-bold text-red-700">{{ myStats.losses }}</span></div>
-              <div class="flex justify-between"><span>Потоплено:</span><span class="font-bold">{{ myStats.ships_sunk }}</span></div>
-              <div class="flex justify-between"><span>Выстрелов:</span><span class="font-bold">{{ myStats.total_shots }}</span></div>
-              <div class="flex justify-between"><span>Попаданий:</span><span class="font-bold text-emerald-700">{{ myStats.hits }}</span></div>
-              <div class="border-t border-gray-400 my-1"></div>
               <div class="flex justify-between"><span>% побед:</span><span class="font-bold">{{ (myStats.win_percentage || 0).toFixed(1) }}%</span></div>
               <div class="flex justify-between"><span>% попаданий:</span><span class="font-bold">{{ (myStats.hit_percentage || 0).toFixed(1) }}%</span></div>
               <div class="border-t border-gray-400 my-1"></div>
-              <div class="font-bold text-xs mb-1">Мои корабли:</div>
+              <div class="font-bold text-xs mb-1">Кораблей осталось:</div>
               <div class="flex justify-between"><span>4-палубный:</span><span class="font-bold">{{ myShipsAlive[4] || 0 }}</span></div>
               <div class="flex justify-between"><span>3-палубных:</span><span class="font-bold">{{ myShipsAlive[3] || 0 }}</span></div>
               <div class="flex justify-between"><span>2-палубных:</span><span class="font-bold">{{ myShipsAlive[2] || 0 }}</span></div>
@@ -133,7 +124,7 @@
         <div class="w-full max-w-[500px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-6 text-black shadow-md">
           <h2 class="text-2xl font-faero mb-4 text-center border-b-2 border-gray-400 pb-2 tracking-wide">YOUR FLEET</h2>
           
-          <div class="w-full aspect-square border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] p-2 relative overflow-hidden"
+          <div class="w-full aspect-square border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] p-2 relative overflow-hidden defense-grid"
                :style="{ backgroundImage: `url(${water1Url})`, backgroundSize: 'cover', backgroundPosition: 'center' }">
             
             <div 
@@ -152,7 +143,16 @@
               ]"
               :style="getPlacedShipStyle(ship)"
             >
-              <img :src="getShipImage(ship.size, ship.direction)" class="pointer-events-none w-full h-full object-contain absolute inset-0" />
+              <img :src="getShipImage(ship.size, ship.direction)" loading="eager" draggable="false" class="pointer-events-none w-full h-full object-fill absolute inset-0 select-none" />
+            </div>
+
+            <div 
+              v-for="ship in gamePlayerShips" 
+              :key="'game-'+ship.id"
+              class="absolute z-15 overflow-hidden bg-blue-950/20 pointer-events-none"
+              :style="getGameShipStyle(ship)"
+            >
+              <img :src="getShipImage(ship.size, ship.direction)" loading="eager" draggable="false" class="pointer-events-none w-full h-full object-fill absolute inset-0 select-none" />
             </div>
 
             <div class="relative z-10 w-full h-full grid grid-cols-11 grid-rows-11 text-center items-center text-sm font-bold text-white bg-blue-950/20"
@@ -173,7 +173,7 @@
                   @dragover.prevent="handleDragOver(rowIdx - 1, colIdx - 1)"
                   @drop="handleDrop(rowIdx - 1, colIdx - 1)"
                 >
-                  <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'hit'" class="text-base z-30 filter drop-shadow animate-scale-pop text-red-500">⦻</span>
+                  <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'hit'" class="text-base z-30 filter drop-shadow animate-scale-pop">💥</span>
                   <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'miss'" class="text-xs z-30 text-cyan-300 font-mono">⭕</span>
                   <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'destroyed'" class="text-base z-50 animate-scale-pop">💀</span>
                 </div>
@@ -184,7 +184,7 @@
 
         <div class="w-full max-w-[500px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-6 text-black shadow-md">
           <h2 class="text-2xl font-faero mb-4 text-center border-b-2 border-gray-400 pb-2 tracking-wide">
-            ENEMY FLEET <span v-if="opponentName" class="text-sm text-gray-600">({{ opponentName }})</span>
+            ENEMY FLEET
           </h2>
           
           <div class="w-full aspect-square border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] p-2 relative"
@@ -216,15 +216,10 @@
         </div>
 
         <div v-if="opponentStats && (gameState === 'player-turn' || gameState === 'enemy-turn' || gameState === 'waiting' || gameState === 'finished')" class="w-full xl:w-[240px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-4 text-black flex flex-col shadow-sm">
-          <h2 class="text-lg font-faero mb-2 text-center border-b-2 border-gray-400 pb-1 tracking-wide">📊 {{ opponentName || 'Соперник' }}</h2>
+          <h2 class="text-lg mb-2 text-center border-b-2 border-gray-400 pb-1 tracking-wide"
+              style="font-family: Tahoma, 'MS Sans Serif', Verdana, sans-serif;">📊 {{ opponentName || 'Соперник' }}</h2>
           <div class="text-[10px] font-mono space-y-1 bg-gray-200 p-2 border border-gray-400 flex-grow">
             <div class="flex justify-between"><span>Игр:</span><span class="font-bold">{{ opponentStats.total_games }}</span></div>
-            <div class="flex justify-between"><span>Побед:</span><span class="font-bold text-green-700">{{ opponentStats.wins }}</span></div>
-            <div class="flex justify-between"><span>Поражений:</span><span class="font-bold text-red-700">{{ opponentStats.losses }}</span></div>
-            <div class="flex justify-between"><span>Потоплено:</span><span class="font-bold">{{ opponentStats.ships_sunk }}</span></div>
-            <div class="flex justify-between"><span>Выстрелов:</span><span class="font-bold">{{ opponentStats.total_shots }}</span></div>
-            <div class="flex justify-between"><span>Попаданий:</span><span class="font-bold text-emerald-700">{{ opponentStats.hits }}</span></div>
-            <div class="border-t border-gray-400 my-1"></div>
             <div class="flex justify-between"><span>% побед:</span><span class="font-bold">{{ (opponentStats.win_percentage || 0).toFixed(1) }}%</span></div>
             <div class="flex justify-between"><span>% попаданий:</span><span class="font-bold">{{ (opponentStats.hit_percentage || 0).toFixed(1) }}%</span></div>
             <div class="border-t border-gray-400 my-1"></div>
@@ -234,7 +229,7 @@
             <div class="flex justify-between"><span>2-палубных:</span><span class="font-bold">{{ opponentShipsAlive[2] || 0 }}</span></div>
             <div class="flex justify-between"><span>1-палубных:</span><span class="font-bold">{{ opponentShipsAlive[1] || 0 }}</span></div>
           </div>
-          <button v-if="gameState === 'player-turn' || gameState === 'enemy-turn'"
+          <button v-if="gameState === 'player-turn' || gameState === 'enemy-turn' || gameState === 'waiting'"
             @click="forfeitGame"
             class="mt-2 w-full py-1 text-xs font-faero text-red-700 bg-red-100 border border-red-300 hover:bg-red-200 transition-colors tracking-wider"
           >
@@ -320,6 +315,7 @@ const handleGlobalKeydown = (e) => {
 }
 
 const goBackToMenu = () => {
+  isLeaving.value = true
   if (playAgainTimeout.value) {
     clearTimeout(playAgainTimeout.value)
     playAgainTimeout.value = null
@@ -334,6 +330,8 @@ const goBackToMenu = () => {
   isRevanchReady.value = false
   revanchOpponentReady.value = false
   gameReward.value = null
+  clearGrids()
+  clearShipsPlacement()
   emit('back-to-menu')
 }
 
@@ -345,6 +343,7 @@ const toggleRevanch = () => {
 }
 
 const forceLeaveToLobby = () => {
+  isLeaving.value = true
   if (socket.value && socket.value.readyState === WebSocket.OPEN) {
     socket.value.send(JSON.stringify({ type: 'force_leave_to_lobby' }))
   }
@@ -478,6 +477,7 @@ const originalCol = ref(null)
 const activeHoverCells = ref([])
 const isHoverInvalid = ref(false)
 const isDragging = ref(false)
+const isLeaving = ref(false)
 const processedMovesCount = ref(0)
 const lastGameData = ref(null)
 
@@ -518,6 +518,22 @@ const opponentShipsAlive = computed(() => {
   return computeShipsAlive(lastGameData.value.ships, opponentID)
 })
 
+const gamePlayerShips = computed(() => {
+  if (!lastGameData.value || !myPlayerID.value) return []
+  if (gameState.value === 'placement' || gameState.value === 'searching' || gameState.value === 'finished') return []
+  const ships = lastGameData.value.ships || []
+  return ships
+    .filter(s => s.player_id === myPlayerID.value)
+    .map(s => ({
+      id: s.id,
+      size: s.size,
+      direction: s.direction,
+      row: s.row,
+      col: s.col,
+      sunk: s.sunk
+    }))
+})
+
 const canUserShoot = computed(() => {
   return gameState.value === 'player-turn' && currentTurnPlayerID.value === myPlayerID.value
 })
@@ -530,10 +546,10 @@ const resultMessage = computed(() => {
 })
 
 const resultColorClass = computed(() => {
-  if (gameResult.value === 'win') return 'text-green-700'
-  if (gameResult.value === 'draw') return 'text-amber-700'
-  if (gameResult.value === 'lose') return 'text-red-700'
-  return 'text-gray-700'
+  if (gameResult.value === 'win') return 'text-win'
+  if (gameResult.value === 'draw') return 'text-neutral'
+  if (gameResult.value === 'lose') return 'text-loss'
+  return 'text-neutral'
 })
 
 const rewardMessage = computed(() => {
@@ -544,8 +560,8 @@ const rewardMessage = computed(() => {
 })
 
 const rewardColorClass = computed(() => {
-  if (gameReward.value === null) return ''
-  return gameReward.value >= 0 ? 'text-green-600' : 'text-red-600'
+  if (gameReward.value === null || gameReward.value === 0) return 'text-neutral'
+  return gameReward.value > 0 ? 'reward-positive' : 'reward-negative'
 })
 
 const parseMyIDFromToken = () => {
@@ -614,7 +630,6 @@ const initWebSocket = () => {
           break
 
         case 'game_started':
-          // игнорируем, если игра уже активна (было переподключение или запоздалое сообщение)
           if (gameState.value !== 'placement' && gameState.value !== 'searching' && gameState.value !== 'waiting') {
             break
           }
@@ -622,9 +637,15 @@ const initWebSocket = () => {
           if (typeof gsData === 'string') {
             try { gsData = JSON.parse(gsData) } catch(e) { gsData = null }
           }
-          if (gsData && gsData.current_turn) {
-            currentTurnPlayerID.value = gsData.current_turn
-            gameState.value = (gsData.current_turn === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
+          if (gsData) {
+            if (gsData.current_turn) {
+              currentTurnPlayerID.value = gsData.current_turn
+              gameState.value = (gsData.current_turn === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
+            }
+            if (gsData.player1_name && gsData.player2_name) {
+              opponentName.value = (myPlayerID.value === gsData.player1_id)
+                ? gsData.player2_name : gsData.player1_name
+            }
           }
           triggerNotification('⚔️ Игра началась!', 'success', 3000)
           break
@@ -685,25 +706,31 @@ const initWebSocket = () => {
           {
             let gd = response.data
             if (typeof gd === 'string') { try { gd = JSON.parse(gd) } catch(e) { gd = null } }
-            const winnerId = gd ? (gd.winner_id || gd.WinnerID) : null
-            const result = gd ? (gd.result || 'win') : 'win'
-            const reward1 = gd ? (gd.reward1 || 0) : 0
-            const reward2 = gd ? (gd.reward2 || 0) : 0
-            const hits1 = gd ? (gd.hits1 || 0) : 0
-            const hits2 = gd ? (gd.hits2 || 0) : 0
-            const perfect1 = gd ? (gd.perfect_win1 || false) : false
-            const perfect2 = gd ? (gd.perfect_win2 || false) : false
+            if (!gd) break
+            const winnerId = gd.winner_id || gd.WinnerID || null
+            const result = gd.result || 'win'
+            const reward1 = gd.reward1 ?? 0
+            const reward2 = gd.reward2 ?? 0
+            const hits1 = gd.hits1 ?? 0
+            const hits2 = gd.hits2 ?? 0
+            const perfect1 = gd.perfect_win1 ?? false
+            const perfect2 = gd.perfect_win2 ?? false
 
-            // Determine which reward is mine based on player ID
-            const p1ID = gd ? gd.player1_id : null
-            const isP1 = myPlayerID.value === p1ID || lastGameData.value?.player1_id === myPlayerID.value
+            const newBalance1 = gd.new_balance1 ?? null
+            const newBalance2 = gd.new_balance2 ?? null
+
+            const isP1 = myPlayerID.value === gd.player1_id
             const myReward = isP1 ? reward1 : reward2
             const myHits = isP1 ? hits1 : hits2
             const myPerfect = isP1 ? perfect1 : perfect2
+            const myNewBalance = isP1 ? newBalance1 : newBalance2
 
             gameReward.value = myReward
             perfectWin.value = myPerfect
             playerHits.value = myHits
+            if (myNewBalance !== null) {
+              localStorage.setItem('coins', String(myNewBalance))
+            }
 
             if (result === 'draw') {
               gameResult.value = 'draw'
@@ -763,6 +790,7 @@ const initWebSocket = () => {
 
         case 'opponent_left':
           {
+            if (isLeaving.value) break
             let od = response.data
             if (typeof od === 'string') { try { od = JSON.parse(od) } catch(e) { od = null } }
             triggerNotification(od?.message || '👋 Соперник покинул игру', 'error', 8000)
@@ -802,16 +830,89 @@ const initWebSocket = () => {
             let rsd = response.data
             if (typeof rsd === 'string') { try { rsd = JSON.parse(rsd) } catch(e) { rsd = null } }
             if (rsd?.game_id) {
-              if (countdownInterval) {
-                clearInterval(countdownInterval)
-                countdownInterval = null
+              if (playAgainTimeout.value) {
+                clearTimeout(playAgainTimeout.value)
+                playAgainTimeout.value = null
               }
+              if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null }
+              if (socket.value) {
+                socket.value.onclose = null
+                socket.value.close()
+                socket.value = null
+              }
+              opponentName.value = ''
+              currentTurnPlayerID.value = null
+              currentTurnId.value = null
+              isReady.value = false
+              isSending.value = false
+              notificationMessage.value = ''
+              placementSecondsLeft.value = null
+              turnSecondsLeft.value = null
+              gameReward.value = null
+              gameResult.value = ''
+              perfectWin.value = false
+              playerHits.value = 0
+              lastGameData.value = null
+              myStats.value = null
+              opponentStats.value = null
+              processedMovesCount.value = 0
+              countdown.value = 20
               isRevanchReady.value = false
               revanchOpponentReady.value = false
-              gameReward.value = null
+              for (let r = 0; r < 10; r++) {
+                for (let c = 0; c < 10; c++) {
+                  playerDefenseGrid.value[r][c] = 'none'
+                  enemyAttackGrid.value[r][c] = { status: 'none', animating: false, exploding: false }
+                }
+              }
+              const freshShips = [
+                { id: 1, size: 4, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 2, size: 3, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 3, size: 3, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 4, size: 2, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 5, size: 2, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 6, size: 2, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 7, size: 1, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 8, size: 1, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 9, size: 1, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 10, size: 1, placed: false, row: null, col: null, direction: 'horizontal' },
+              ]
+              availableShips.value = freshShips
               gameState.value = 'searching'
               localGameId.value = rsd.game_id
+              localStorage.removeItem(SHIPS_STORAGE_KEY)
               initWebSocket()
+            }
+          }
+          break
+
+        case 'game_state':
+          {
+            let gs = response.data
+            if (typeof gs === 'string') { try { gs = JSON.parse(gs) } catch(e) { gs = null } }
+            if (!gs) break
+            lastGameData.value = gs
+            const rawStatus = gs.Status || gs.status
+            if (gs.player1_name && gs.player2_name) {
+              opponentName.value = (myPlayerID.value === gs.player1_id)
+                ? gs.player2_name : gs.player1_name
+            }
+            if (rawStatus === 'placing_ships') {
+              updatePlayerStats(gs)
+              if (gameState.value === 'searching') {
+                gameState.value = 'placement'
+                clearShipsPlacement()
+                triggerNotification('⚔️ Соперник найден! Переходим к расстановке флота.', 'success', 4000)
+              }
+            } else if (rawStatus === 'playing') {
+              handlePlayingState(gs)
+              clearGrids()
+              applyMoveHistory(gs, gs.Moves || gs.moves || [])
+              applySunkShips(gs)
+              applySunkEnemyShips(gs)
+              updatePlayerStats(gs)
+            } else if (rawStatus === 'finished') {
+              handleGameFinished(gs)
             }
           }
           break
@@ -842,9 +943,164 @@ const initWebSocket = () => {
 
   socket.value.onclose = (e) => {
     clearInterval(pingInterval)
-    if (gameState.value !== 'finished') {
+    if (gameState.value !== 'finished' && !isLeaving.value && !props.isLobbyWait) {
       triggerNotification('🚨 Канал прерван сервером. Попробуйте обновить страницу.', 'error', null)
     }
+  }
+}
+
+const clearGrids = () => {
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 10; c++) {
+      if (playerDefenseGrid.value[r][c] !== 'destroyed') {
+        playerDefenseGrid.value[r][c] = 'none'
+      }
+      if (enemyAttackGrid.value[r][c].status !== 'destroyed') {
+        enemyAttackGrid.value[r][c].status = 'none'
+      }
+    }
+  }
+}
+
+const markSunkShip = (shipCells, grid, isObjectGrid) => {
+  shipCells.forEach(cell => {
+    const x = cell.x !== undefined ? cell.x : cell.X
+    const y = cell.y !== undefined ? cell.y : cell.Y
+    if (y >= 0 && y < 10 && x >= 0 && x < 10) {
+      if (isObjectGrid) {
+        grid[y][x].status = 'destroyed'
+      } else {
+        grid[y][x] = 'destroyed'
+      }
+    }
+  })
+}
+
+const markSurroundingMisses = (shipCells, grid) => {
+  for (const cell of shipCells) {
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const nr = cell.y + dr
+        const nc = cell.x + dc
+        if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10) {
+          const val = grid[nr][nc]
+          if (val === 'none' || val?.status === 'none') {
+            if (typeof val === 'object') {
+              grid[nr][nc].status = 'miss'
+            } else {
+              grid[nr][nc] = 'miss'
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+const applyMoveHistory = (game, incomingMoves) => {
+  const movesList = game.Moves || game.moves
+  if (!movesList || !Array.isArray(movesList)) return
+
+  movesList.forEach(move => {
+    const pId = move.player_id || move.PlayerID
+    const mX = move.x !== undefined ? move.x : move.X
+    const mY = move.y !== undefined ? move.y : move.Y
+    const mHit = move.hit !== undefined ? move.hit : move.Hit
+    const isMyMove = pId === myPlayerID.value
+    const cellStatus = mHit ? 'hit' : 'miss'
+    if (isMyMove) {
+      enemyAttackGrid.value[mY][mX].status = cellStatus
+    } else {
+      playerDefenseGrid.value[mY][mX] = cellStatus
+    }
+  })
+  processedMovesCount.value = incomingMoves.length
+}
+
+const applySunkShips = (game) => {
+  const shipsList = game.Ships || game.ships
+  if (!shipsList || !Array.isArray(shipsList)) return
+
+  shipsList.forEach(ship => {
+    const shipCells = ship.cells || ship.Cells || []
+    const shipPlayerId = ship.player_id || ship.PlayerID
+    const isSunk = ship.sunk || ship.Sunk
+    if (!isSunk) return
+
+    if (shipPlayerId === myPlayerID.value) {
+      markSunkShip(shipCells, playerDefenseGrid.value, false)
+      markSurroundingMisses(shipCells, playerDefenseGrid.value)
+    } else {
+      markSunkShip(shipCells, enemyAttackGrid.value, true)
+      markSurroundingMisses(shipCells, enemyAttackGrid.value)
+    }
+  })
+}
+
+const applySunkEnemyShips = (game) => {
+  const sunkEnemyList = game.sunk_enemy_ships || game.SunkEnemyShips
+  if (!sunkEnemyList || !Array.isArray(sunkEnemyList)) return
+
+  sunkEnemyList.forEach(ship => {
+    const shipCells = ship.cells || ship.Cells || []
+    shipCells.forEach(cell => {
+      const x = cell.x !== undefined ? cell.x : cell.X
+      const y = cell.y !== undefined ? cell.y : cell.Y
+      if (y >= 0 && y < 10 && x >= 0 && x < 10) {
+        enemyAttackGrid.value[y][x].status = 'destroyed'
+      }
+    })
+    for (const cell of shipCells) {
+      const cx = cell.x !== undefined ? cell.x : cell.X
+      const cy = cell.y !== undefined ? cell.y : cell.Y
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = cy + dr
+          const nc = cx + dc
+          if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10) {
+            if (enemyAttackGrid.value[nr][nc].status === 'none') {
+              enemyAttackGrid.value[nr][nc].status = 'miss'
+            }
+          }
+        }
+      }
+    }
+  })
+}
+
+const updatePlayerStats = (game) => {
+  const p1Stats = game.player1_stats
+  const p2Stats = game.player2_stats
+  if (!p1Stats || !p2Stats) return
+
+  const isP1 = myPlayerID.value === (game.player1_id || game.Player1ID)
+  myStats.value = isP1 ? p1Stats : p2Stats
+  opponentStats.value = isP1 ? p2Stats : p1Stats
+}
+
+const handleGameFinished = (game) => {
+  gameState.value = 'finished'
+  const winnerId = game.WinnerID || game.winner_id
+  if (!winnerId || winnerId === '00000000-0000-0000-0000-000000000000') {
+    triggerNotification('🤝 НИЧЬЯ! Оба флота уничтожены!', 'success', null)
+  } else if (winnerId === myPlayerID.value) {
+    triggerNotification('🏆 ПОБЕДА! Вражеский флот полностью разгромлен!', 'success', null)
+  } else {
+    triggerNotification('💥 ПОРАЖЕНИЕ. Ваш флот уничтожен.', 'error', null)
+  }
+  clearShipsPlacement()
+  clearGrids()
+  startCountdown()
+}
+
+const handlePlayingState = (game) => {
+  const turnId = game.CurrentTurn || game.current_turn
+  currentTurnPlayerID.value = turnId
+  gameState.value = (turnId === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
+  const p1name = game.player1_name || game.Player1Name
+  const p2name = game.player2_name || game.Player2Name
+  if (p1name && p2name) {
+    opponentName.value = (myPlayerID.value === (game.player1_id || game.Player1ID)) ? p2name : p1name
   }
 }
 
@@ -865,18 +1121,9 @@ const processServerGameState = (game) => {
     }
     return
   }
-  
+
   if (rawStatus === 'finished') {
-    gameState.value = 'finished'
-    const winnerId = game.WinnerID || game.winner_id
-    if (!winnerId || winnerId === '00000000-0000-0000-0000-000000000000') {
-      triggerNotification('🤝 НИЧЬЯ! Оба флота уничтожены!', 'success', null)
-    } else if (winnerId === myPlayerID.value) {
-      triggerNotification('🏆 ПОБЕДА! Вражеский флот полностью разгромлен!', 'success', null)
-    } else {
-      triggerNotification('💥 ПОРАЖЕНИЕ. Ваш флот уничтожен.', 'error', null)
-    }
-    startCountdown()
+    handleGameFinished(game)
     return
   }
 
@@ -886,136 +1133,14 @@ const processServerGameState = (game) => {
   }
 
   if (rawStatus === 'playing') {
-    const turnId = game.CurrentTurn || game.current_turn
-    currentTurnPlayerID.value = turnId
-    gameState.value = (turnId === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
-    const p1name = game.player1_name || game.Player1Name
-    const p2name = game.player2_name || game.Player2Name
-    if (p1name && p2name) {
-      opponentName.value = (myPlayerID.value === (game.player1_id || game.Player1ID)) ? p2name : p1name
-    }
+    handlePlayingState(game)
   }
 
-  // Очистка сеток перед рендером
-  for (let r = 0; r < 10; r++) {
-    for (let c = 0; c < 10; c++) {
-      playerDefenseGrid.value[r][c] = 'none'
-      enemyAttackGrid.value[r][c].status = 'none'
-    }
-  }
-
-  // Маппинг истории ходов из структуры бэкенда []Move
-  const movesList = game.Moves || game.moves
-  if (movesList && Array.isArray(movesList)) {
-    movesList.forEach(move => {
-      const pId = move.player_id || move.PlayerID
-      const mX = move.x !== undefined ? move.x : move.X
-      const mY = move.y !== undefined ? move.y : move.Y
-      const mHit = move.hit !== undefined ? move.hit : move.Hit
-
-      const isMyMove = pId === myPlayerID.value
-      const cellStatus = mHit ? 'hit' : 'miss'
-
-      if (isMyMove) {
-        enemyAttackGrid.value[mY][mX].status = cellStatus
-      } else {
-        playerDefenseGrid.value[mY][mX] = cellStatus
-      }
-    })
-    processedMovesCount.value = incomingMoves.length
-  }
-
-  // Отмечаем сбитые корабли на обеих сетках
-  const shipsList = game.Ships || game.ships
-  if (shipsList && Array.isArray(shipsList)) {
-    const markSurroundingMisses = (shipCells, grid) => {
-      for (const cell of shipCells) {
-        for (let dr = -1; dr <= 1; dr++) {
-          for (let dc = -1; dc <= 1; dc++) {
-            const nr = cell.y + dr
-            const nc = cell.x + dc
-            if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10) {
-              if (grid[nr][nc] === 'none' || grid[nr][nc]?.status === 'none') {
-                if (typeof grid[nr]?.[nc] === 'object') {
-                  grid[nr][nc].status = 'miss'
-                } else {
-                  grid[nr][nc] = 'miss'
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    shipsList.forEach(ship => {
-      const shipCells = ship.cells || ship.Cells || []
-      const shipPlayerId = ship.player_id || ship.PlayerID
-      const isSunk = ship.sunk || ship.Sunk
-
-      if (!isSunk) return
-
-      if (shipPlayerId === myPlayerID.value) {
-        shipCells.forEach(cell => {
-          const x = cell.x !== undefined ? cell.x : cell.X
-          const y = cell.y !== undefined ? cell.y : cell.Y
-          if (y >= 0 && y < 10 && x >= 0 && x < 10) {
-            playerDefenseGrid.value[y][x] = 'destroyed'
-          }
-        })
-        markSurroundingMisses(shipCells, playerDefenseGrid.value)
-      } else {
-        shipCells.forEach(cell => {
-          const x = cell.x !== undefined ? cell.x : cell.X
-          const y = cell.y !== undefined ? cell.y : cell.Y
-          if (y >= 0 && y < 10 && x >= 0 && x < 10) {
-            enemyAttackGrid.value[y][x].status = 'destroyed'
-          }
-        })
-        markSurroundingMisses(shipCells, enemyAttackGrid.value)
-      }
-    })
-  }
-
-  // Отмечаем потопленные корабли противника (из sunk_enemy_ships, передаётся broadcastGameState)
-  const sunkEnemyList = game.sunk_enemy_ships || game.SunkEnemyShips
-  if (sunkEnemyList && Array.isArray(sunkEnemyList)) {
-    sunkEnemyList.forEach(ship => {
-      const shipCells = ship.cells || ship.Cells || []
-      shipCells.forEach(cell => {
-        const x = cell.x !== undefined ? cell.x : cell.X
-        const y = cell.y !== undefined ? cell.y : cell.Y
-        if (y >= 0 && y < 10 && x >= 0 && x < 10) {
-          enemyAttackGrid.value[y][x].status = 'destroyed'
-        }
-      })
-      // Отмечаем промахи вокруг потопленного корабля
-      for (const cell of shipCells) {
-        const cx = cell.x !== undefined ? cell.x : cell.X
-        const cy = cell.y !== undefined ? cell.y : cell.Y
-        for (let dr = -1; dr <= 1; dr++) {
-          for (let dc = -1; dc <= 1; dc++) {
-            const nr = cy + dr
-            const nc = cx + dc
-            if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10) {
-              if (enemyAttackGrid.value[nr][nc].status === 'none') {
-                enemyAttackGrid.value[nr][nc].status = 'miss'
-              }
-            }
-          }
-        }
-      }
-    })
-  }
-
-  // Извлекаем статистику игроков из состояния игры
-  const p1Stats = game.player1_stats
-  const p2Stats = game.player2_stats
-  if (p1Stats && p2Stats) {
-    const isP1 = myPlayerID.value === (game.player1_id || game.Player1ID)
-    myStats.value = isP1 ? p1Stats : p2Stats
-    opponentStats.value = isP1 ? p2Stats : p1Stats
-  }
+  clearGrids()
+  applyMoveHistory(game, incomingMoves)
+  applySunkShips(game)
+  applySunkEnemyShips(game)
+  updatePlayerStats(game)
 }
 
 /**
@@ -1204,6 +1329,8 @@ const randomizeFleet = () => {
 }
 
 const leaveLobby = async () => {
+  isLeaving.value = true
+  emit('back-to-menu')
   try {
     await apiClient.leaveMatchmaking()
   } catch (e) {
@@ -1220,10 +1347,6 @@ const leaveLobby = async () => {
     socket.value.send(JSON.stringify({ type: 'leave_lobby' }))
   }
   clearShipsPlacement()
-  gameState.value = 'searching'
-  placementSecondsLeft.value = null
-  turnSecondsLeft.value = null
-  emit('back-to-menu')
 }
 
 const forfeitGame = async () => {
@@ -1246,19 +1369,39 @@ const removeShipFromBoard = (ship) => {
 }
 
 const getDockShipBoxStyle = (ship) => {
-  if (ship.direction === 'vertical') {
-    return { width: `32px`, height: `${ship.size * 32}px` }
-  }
-  return { width: `${ship.size * 32}px`, height: `32px` }
+  const cellPx = 58
+  const w = ship.direction === 'horizontal' ? ship.size * cellPx : cellPx
+  const h = ship.direction === 'vertical' ? ship.size * cellPx : cellPx
+  return { width: `${w}px`, height: `${h}px`, flexShrink: '0' }
 }
 
 const getPlacedShipStyle = (ship) => {
-  const u = 100 / 11
+  const gridEl = document.querySelector('.defense-grid .grid-cols-11')
+  if (!gridEl) return {}
+  const rect = gridEl.getBoundingClientRect()
+  const cellW = rect.width / 11
+  const cellH = rect.height / 11
   return {
-    left: ((ship.col + 1) * u) + '%', 
-    top: ((ship.row + 1) * u) + '%',
-    width: (ship.direction === 'horizontal' ? ship.size * u : u) + '%',
-    height: (ship.direction === 'vertical' ? ship.size * u : u) + '%',
+    left: `${(ship.col + 1) * cellW}px`,
+    top: `${(ship.row + 1) * cellH}px`,
+    width: ship.direction === 'horizontal' ? `${ship.size * cellW}px` : `${cellW}px`,
+    height: ship.direction === 'vertical' ? `${ship.size * cellH}px` : `${cellH}px`,
+  }
+}
+
+const getGameShipStyle = (ship) => {
+  const gridEl = document.querySelector('.defense-grid .grid-cols-11')
+  if (!gridEl) return {}
+  const rect = gridEl.getBoundingClientRect()
+  const cellW = rect.width / 11
+  const cellH = rect.height / 11
+  const sunkOpacity = ship.sunk ? 0.4 : 0.8
+  return {
+    left: `${(ship.col + 1) * cellW}px`,
+    top: `${(ship.row + 1) * cellH}px`,
+    width: ship.direction === 'horizontal' ? `${ship.size * cellW}px` : `${cellW}px`,
+    height: ship.direction === 'vertical' ? `${ship.size * cellH}px` : `${cellH}px`,
+    opacity: sunkOpacity,
   }
 }
 
@@ -1273,8 +1416,21 @@ const handleDragStart = (e, ship, source) => {
     originalRow.value = ship.row
     originalCol.value = ship.col
   }
-  
-  e.dataTransfer.effectAllowed = 'move' 
+
+  e.dataTransfer.effectAllowed = 'move'
+
+  const ghost = e.target.cloneNode(true)
+  ghost.style.position = 'absolute'
+  ghost.style.top = '-1000px'
+  ghost.style.left = '-1000px'
+  ghost.style.opacity = '0.6'
+  ghost.style.pointerEvents = 'none'
+  document.body.appendChild(ghost)
+  const ghostRect = ghost.getBoundingClientRect()
+  const offsetX = e.clientX - (source === 'dock' ? ghostRect.left : ghostRect.left)
+  const offsetY = e.clientY - (source === 'dock' ? ghostRect.top : ghostRect.top)
+  e.dataTransfer.setDragImage(ghost, offsetX, offsetY)
+  setTimeout(() => document.body.removeChild(ghost), 0)
 }
 
 const handleDragOver = (row, col) => {
@@ -1303,10 +1459,10 @@ const handleDrop = (row, col) => {
 
   if (!isHoverInvalid.value) {
     const s = availableShips.value.find(x => x.id === draggedShip.value.id)
-    if (s) { 
+    if (s) {
       s.row = row
       s.col = col
-      s.placed = true 
+      s.placed = true
     }
     saveShipsPlacement()
   } else {
@@ -1316,7 +1472,7 @@ const handleDrop = (row, col) => {
       triggerNotification('❌ Неверная позиция для установки', 'error', 2000)
     }
   }
-  
+
   draggedShip.value = null
   activeHoverCells.value = []
   originalRow.value = null
@@ -1350,28 +1506,14 @@ onMounted(async () => {
 
   // Poll for active games while searching (fallback if WS match_found is lost)
   lobbyPollInterval = setInterval(async () => {
-    try {
-      const games = await apiClient.getActiveGame()
-      if (games && games.length > 0) {
-        const game = games[0]
-        if (game.id && game.id !== localGameId.value) {
-          localGameId.value = game.id
-          gameState.value = 'placement'
-          clearShipsPlacement()
-          triggerNotification('⚔️ Игра найдена! Переходим к расстановке флота.', 'success', 4000)
-        }
-      }
-    } catch (_) {}
-    // Also check HTTP matchmaking status for quick search
     if (!props.isLobbyWait && gameState.value === 'searching') {
       try {
         const matchStatus = await apiClient.getMatchmakingStatus()
         if (matchStatus && matchStatus.status !== 'searching') {
-          // not searching anymore — either found or errored
         }
       } catch (_) {}
     }
-  }, 2000)
+  }, 5000)
 })
 
 onUnmounted(() => {
@@ -1411,6 +1553,12 @@ onUnmounted(() => {
 @keyframes laserScan { from { transform: scale(1.1); opacity: 0.5; } to { transform: scale(0.9); opacity: 1; } }
 .explosion-flash { background-color: #ffffff; animation: flashExplode 0.25s ease-out forwards; }
 @keyframes flashExplode { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+.text-win  { color: #15803d; }
+.text-loss { color: #b91c1c; }
+.text-neutral { color: #6b7280; }
+.reward-positive { color: #16a34a; }
+.reward-negative { color: #dc2626; }
 
 .btn--dimmed {
   opacity: 0.6;

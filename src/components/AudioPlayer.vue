@@ -7,13 +7,21 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { useAudio } from '../composables/useAudio'
 
 const audioEl = ref(null)
-const { setAudioElement, volume, play, nextTrack, setPlaylist } = useAudio()
+const { setAudioElement, volume, play, pause, nextTrack, setPlaylist } = useAudio()
 
 const PLAYLIST = [
   '/audio/bgm1.mp3',
   '/audio/bgm2.mp3',
   '/audio/bgm3.mp3',
 ]
+
+const handleVisibilityChange = () => {
+  if (document.hidden) {
+    pause()
+  } else {
+    play()
+  }
+}
 
 onMounted(() => {
   if (!audioEl.value) return
@@ -24,6 +32,8 @@ onMounted(() => {
   audioEl.value.addEventListener('ended', nextTrack)
 
   setPlaylist(PLAYLIST)
+
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 
   const tryPlay = () => {
     play()
@@ -38,5 +48,6 @@ onUnmounted(() => {
   if (audioEl.value) {
     audioEl.value.removeEventListener('ended', nextTrack)
   }
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>

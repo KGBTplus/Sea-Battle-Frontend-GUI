@@ -35,7 +35,7 @@
 
     <div v-else-if="isAuthorized && !isGameStarted" class="relative z-10 w-full max-w-xl p-4 animate-fade-in">
       <Lobby
-        v-if="!showLeaderboard && !showProfile && !showShop && !showInventory"
+        v-if="!showLeaderboard && !showProfile && !showShop && !showInventory && !showMatchHistory"
         :username="currentUsername" 
         @game-ready="startGameSession" 
         @logout="logout"
@@ -43,10 +43,12 @@
         @show-profile="showProfile = true"
         @show-shop="showShop = true"
         @show-inventory="showInventory = true"
+        @show-match-history="showMatchHistory = true"
       />
       <Shop v-else-if="showShop" @close="showShop = false" @profile-updated="handleProfileUpdate" />
       <Inventory v-else-if="showInventory" @close="showInventory = false" @profile-updated="handleProfileUpdate" />
       <Leaderboard v-else-if="showLeaderboard" @close="showLeaderboard = false" />
+      <MatchHistory v-else-if="showMatchHistory" @close="showMatchHistory = false" />
       <Profile v-else @close="showProfile = false" @username-changed="(name) => currentUsername = name" />
     </div>
 
@@ -55,7 +57,7 @@
       :gameId="activeGameId"
       :isLobbyWait="isLobbyWait"
       :lobbyId="currentLobbyId"
-      @back-to-menu="isGameStarted = false; isLobbyWait = false; currentLobbyId = ''"
+      @back-to-menu="apiClient.leaveMatchmaking().catch(() => {}); isGameStarted = false; isLobbyWait = false; currentLobbyId = ''; clearGameState()"
     />
 
     <AudioPlayer />
@@ -71,6 +73,7 @@ import Leaderboard from './components/Leaderboard.vue'
 import Profile from './components/Profile.vue'
 import Shop from './components/Shop.vue'
 import Inventory from './components/Inventory.vue'
+import MatchHistory from './components/MatchHistory.vue'
 import AudioPlayer from './components/AudioPlayer.vue'
 import { apiClient } from './api/client' // Импортируем исправленный клиент
 import Hls from 'hls.js'
@@ -86,6 +89,7 @@ const showLeaderboard = ref(false)
 const showProfile = ref(false)
 const showShop = ref(false)
 const showInventory = ref(false)
+const showMatchHistory = ref(false)
 const currentUsername = ref('CyberCommander')
 
 const videoRef = ref(null)
@@ -106,6 +110,48 @@ const handleProfileUpdate = (data) => {
   // Profile was updated (shop/inventory changed); nothing to sync at app level
 }
 
+const saveGameState = () => {
+  try {
+    localStorage.setItem('activeGameId', activeGameId.value)
+    localStorage.setItem('isGameStarted', isGameStarted.value ? '1' : '')
+    localStorage.setItem('isLobbyWait', isLobbyWait.value ? '1' : '')
+    localStorage.setItem('currentLobbyId', currentLobbyId.value)
+    localStorage.setItem('showShop', showShop.value ? '1' : '')
+    localStorage.setItem('showProfile', showProfile.value ? '1' : '')
+    localStorage.setItem('showLeaderboard', showLeaderboard.value ? '1' : '')
+    localStorage.setItem('showInventory', showInventory.value ? '1' : '')
+  } catch {}
+}
+
+const restoreGameState = () => {
+  try {
+    const saved = localStorage.getItem('activeGameId')
+    if (saved) {
+      activeGameId.value = saved
+      isGameStarted.value = localStorage.getItem('isGameStarted') === '1'
+      isLobbyWait.value = localStorage.getItem('isLobbyWait') === '1'
+      currentLobbyId.value = localStorage.getItem('currentLobbyId') || ''
+      showShop.value = localStorage.getItem('showShop') === '1'
+      showProfile.value = localStorage.getItem('showProfile') === '1'
+      showLeaderboard.value = localStorage.getItem('showLeaderboard') === '1'
+      showInventory.value = localStorage.getItem('showInventory') === '1'
+    }
+  } catch {}
+}
+
+const clearGameState = () => {
+  try {
+    localStorage.removeItem('activeGameId')
+    localStorage.removeItem('isGameStarted')
+    localStorage.removeItem('isLobbyWait')
+    localStorage.removeItem('currentLobbyId')
+    localStorage.removeItem('showShop')
+    localStorage.removeItem('showProfile')
+    localStorage.removeItem('showLeaderboard')
+    localStorage.removeItem('showInventory')
+  } catch {}
+}
+
 const logout = async () => {
   try {
     await apiClient.logout()
@@ -121,6 +167,7 @@ const logout = async () => {
   showShop.value = false
   showInventory.value = false
   isStartScreen.value = true
+  clearGameState()
 }
 
 // Вызывается из Лобби при клике на кнопку «НАЧАТЬ ПОИСК СОПЕРНИКА»
@@ -133,18 +180,21 @@ const startGameSession = async (gameId) => {
         activeGameId.value = ''
         isLobbyWait.value = true
         isGameStarted.value = true
+        saveGameState()
         return
       }
       activeGameId.value = gameId
       currentLobbyId.value = ''
       isLobbyWait.value = false
       isGameStarted.value = true
+      saveGameState()
       return
     }
 	activeGameId.value = ''
 	currentLobbyId.value = ''
 	isLobbyWait.value = gameId === 'LOBBY_WAIT'
 	isGameStarted.value = true
+	saveGameState()
   } catch (err) {
     console.error(err)
     alert(`Ошибка старта поиска матча: ${err.message || 'Не удалось связаться с сервером'}`)
@@ -166,6 +216,8 @@ onMounted(async () => {
       isAuthorized.value = true
     }
   } catch {}
+
+  restoreGameState()
 
   const video = videoRef.value
   if (!video) return
