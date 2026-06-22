@@ -3,12 +3,7 @@
     
     <img :src="sceneryUrl" class="absolute top-0 left-0 w-full h-full object-cover z-0 pointer-events-none opacity-40" />
 
-    <div v-if="isFish1Active" class="absolute fish fish-1-container" :style="{ top: fish1Top + '%' }" @animationend="resetFish1">
-      <img :src="fish1Url" alt="Fish 1" class="w-[100px] md:w-[130px] h-auto fish-wiggle drop-shadow-[4px_10px_5px_rgba(0,0,0,0.5)]" />
-    </div>
-    <div v-if="isFish2Active" class="absolute fish fish-2-container" :style="{ top: fish2Top + '%' }" @animationend="resetFish2">
-      <img :src="fish2Url" alt="Fish 2" class="w-[100px] md:w-[130px] h-auto fish-wiggle drop-shadow-[-4px_10px_5px_rgba(0,0,0,0.5)]" />
-    </div>
+    <FishRenderer :activeFishIds="activeFishIds" />
 
     <div class="relative z-10 w-full max-w-7xl p-4 flex flex-col items-center justify-center animate-fade-in gap-6">
       
@@ -55,6 +50,9 @@
         <div v-if="notificationMessage" class="w-full bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-3 text-center shadow-md font-mono text-xs font-bold uppercase tracking-wider animate-scale-pop"
               :class="notificationType === 'error' ? 'text-red-700 border-red-500 bg-red-50' : 'text-green-700 border-green-500 bg-green-50'">
           {{ notificationMessage }}
+        </div>
+        <div v-if="opponentReconnectTimer !== null" class="w-full bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-3 text-center shadow-md font-mono text-xs font-bold uppercase tracking-wider">
+          ⏳ Соперник временно отключился. Ожидание переподключения... ({{ opponentReconnectTimer }}с)
         </div>
       </div>
 
@@ -165,11 +163,12 @@
                 <div 
                   v-for="colIdx in 10" 
                   :key="colIdx"
-                  class="w-full h-full aspect-square border border-white/10 relative flex items-center justify-center"
-                  :class="{ 
-                    'bg-green-500/40': gameState === 'placement' && isCellHovered(rowIdx - 1, colIdx - 1), 
-                    'bg-red-500/50': gameState === 'placement' && isCellHoverInvalid(rowIdx - 1, colIdx - 1) 
-                  }"
+                  class="w-full h-full aspect-square border relative flex items-center justify-center"
+                  :class="[ 
+                    gameState === 'placement' && isCellHovered(rowIdx - 1, colIdx - 1) ? 'bg-green-500/40' : '',
+                    gameState === 'placement' && isCellHoverInvalid(rowIdx - 1, colIdx - 1) ? 'bg-red-500/50' : '',
+                    'border-white/30'
+                  ]"
                   @dragover.prevent="handleDragOver(rowIdx - 1, colIdx - 1)"
                   @drop="handleDrop(rowIdx - 1, colIdx - 1)"
                 >
@@ -199,7 +198,7 @@
                 <div 
                   v-for="colIdx in 10" 
                   :key="colIdx"
-                  class="w-full h-full aspect-square border border-white/10 bg-lime-500/5 hover:bg-lime-400/30 transition-colors duration-100 relative flex items-center justify-center overflow-hidden"
+                  class="w-full h-full aspect-square border border-white/30 bg-lime-500/5 hover:bg-lime-400/30 transition-colors duration-100 relative flex items-center justify-center overflow-hidden"
                   :class="canUserShoot ? 'cursor-crosshair' : 'cursor-not-allowed opacity-80'"
                   @click="handleEnemyCellShot(rowIdx - 1, colIdx - 1)"
                 >
@@ -263,24 +262,23 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, inject, nextTick, onMounted, onUnmounted } from 'vue'
 import { apiClient } from '../api/client' // ИСПРАВЛЕНО: Импортируем наш обновленный клиент
+import FishRenderer from './fish/FishRenderer.vue'
 
 // Импорт графических ассетов
 import sceneryUrl from '../assets/images/scenery.jpeg'
-import fish1Url from '../assets/images/fish1.png'
-import fish2Url from '../assets/images/fish2.png'
 import water1Url from '../assets/images/water1.gif'
 import water2Url from '../assets/images/water2.gif'
 
-import ship1hor from '../assets/images/ship1hor.jpeg'
-import ship1vert from '../assets/images/ship1vert.jpeg'
-import ship2hor from '../assets/images/ship2hor.jpeg'
-import ship2vert from '../assets/images/ship2vert.jpeg'
-import ship3hor from '../assets/images/ship3hor.jpeg'
-import ship3vert from '../assets/images/ship3vert.jpeg'
-import ship4hor from '../assets/images/ship4hor.jpeg'
-import ship4vert from '../assets/images/ship4vert.jpeg'
+import ship1hor from '../assets/images/ship1hor.png'
+import ship1vert from '../assets/images/ship1vert.png'
+import ship2hor from '../assets/images/ship2hor.png'
+import ship2vert from '../assets/images/ship2vert.png'
+import ship3hor from '../assets/images/ship3hor.png'
+import ship3vert from '../assets/images/ship3vert.png'
+import ship4hor from '../assets/images/ship4hor.png'
+import ship4vert from '../assets/images/ship4vert.png'
 
 const props = defineProps({
   gameId: { type: String, default: '' },
@@ -288,6 +286,8 @@ const props = defineProps({
   lobbyId: { type: String, default: '' }
 })
 const emit = defineEmits(['back-to-menu'])
+
+const showAchievementToast = inject('showAchievementToast', () => {})
 
 const playAgainTimeout = ref(null)
 const countdown = ref(20)
@@ -316,6 +316,7 @@ const handleGlobalKeydown = (e) => {
 
 const goBackToMenu = () => {
   isLeaving.value = true
+  stopReconnecting()
   if (playAgainTimeout.value) {
     clearTimeout(playAgainTimeout.value)
     playAgainTimeout.value = null
@@ -332,6 +333,7 @@ const goBackToMenu = () => {
   gameReward.value = null
   clearGrids()
   clearShipsPlacement()
+  localGameId.value = ''
   emit('back-to-menu')
 }
 
@@ -344,11 +346,14 @@ const toggleRevanch = () => {
 
 const forceLeaveToLobby = () => {
   isLeaving.value = true
+  stopReconnecting()
   if (socket.value && socket.value.readyState === WebSocket.OPEN) {
     socket.value.send(JSON.stringify({ type: 'force_leave_to_lobby' }))
   }
   goBackToMenu()
 }
+
+
 
 // Локальная копия ID игры, так как props изменять напрямую нельзя
 const localGameId = ref(props.gameId || '')
@@ -373,11 +378,7 @@ const triggerNotification = (msg, type = 'success', timeout = 5000) => {
   }
 }
 
-const fish1Top = ref(20)
-const fish2Top = ref(70)
-const isFish1Active = ref(true)
-const isFish2Active = ref(true)
-const activeFish = ref([])
+const activeFishIds = ref([])
 
 // Статусы для матчмейкинга: 'searching', 'placement', 'waiting', 'player-turn', 'enemy-turn', 'finished'
 const gameState = ref('searching') 
@@ -478,6 +479,9 @@ const activeHoverCells = ref([])
 const isHoverInvalid = ref(false)
 const isDragging = ref(false)
 const isLeaving = ref(false)
+const isReconnecting = ref(false)
+const reconnectAttempt = ref(0)
+const opponentReconnectTimer = ref(null)
 const processedMovesCount = ref(0)
 const lastGameData = ref(null)
 
@@ -702,6 +706,16 @@ const initWebSocket = () => {
           triggerNotification('👥 Соперник расставляет корабли...', 'success', 3000)
           break
 
+        case 'achievement_unlocked':
+          {
+            let ad = response.data
+            if (typeof ad === 'string') { try { ad = JSON.parse(ad) } catch(e) { ad = null } }
+            if (ad && ad.name) {
+              showAchievementToast(ad)
+            }
+          }
+          break
+
         case 'game_over':
           {
             let gd = response.data
@@ -744,6 +758,7 @@ const initWebSocket = () => {
             }
             clearShipsPlacement()
             gameState.value = 'finished'
+            opponentReconnectTimer.value = null
             isRevanchReady.value = false
             revanchOpponentReady.value = false
             startCountdown()
@@ -793,11 +808,28 @@ const initWebSocket = () => {
             if (isLeaving.value) break
             let od = response.data
             if (typeof od === 'string') { try { od = JSON.parse(od) } catch(e) { od = null } }
-            triggerNotification(od?.message || '👋 Соперник покинул игру', 'error', 8000)
+            opponentReconnectTimer.value = 20
+            triggerNotification(od?.message || '👋 Соперник потерял соединение', 'error', null)
             clearShipsPlacement()
             placementSecondsLeft.value = null
             turnSecondsLeft.value = null
-            setTimeout(() => emit('back-to-menu'), 2000)
+          }
+          break
+
+        case 'opponent_reconnected':
+          {
+            opponentReconnectTimer.value = null
+            triggerNotification('🔄 Соперник переподключился', 'info', 3000)
+          }
+          break
+
+        case 'reconnect_timer':
+          {
+            let td = response.data
+            if (typeof td === 'string') { try { td = JSON.parse(td) } catch(e) { td = null } }
+            if (td && td.seconds_left !== undefined) {
+              opponentReconnectTimer.value = td.seconds_left
+            }
           }
           break
 
@@ -938,15 +970,60 @@ const initWebSocket = () => {
 
   socket.value.onerror = (error) => {
     console.error("WebSocket Error:", error)
-    triggerNotification('❌ Критическая ошибка сетевого канала.', 'error', null)
+    if (!isReconnecting.value) {
+      triggerNotification('❌ Ошибка соединения с сервером.', 'error', null)
+      startReconnect()
+    }
   }
 
   socket.value.onclose = (e) => {
     clearInterval(pingInterval)
     if (gameState.value !== 'finished' && !isLeaving.value && !props.isLobbyWait) {
-      triggerNotification('🚨 Канал прерван сервером. Попробуйте обновить страницу.', 'error', null)
+      if (!isReconnecting.value) {
+        triggerNotification('🚨 Соединение с сервером разорвано.', 'error', null)
+        startReconnect()
+      }
     }
   }
+}
+
+const stopReconnecting = () => {
+  isReconnecting.value = false
+  reconnectAttempt.value = 0
+}
+
+const startReconnect = () => {
+  if (isReconnecting.value || isLeaving.value || gameState.value === 'finished') return
+  isReconnecting.value = true
+  reconnectAttempt.value = 0
+  doReconnect()
+}
+
+const doReconnect = () => {
+  if (isLeaving.value || gameState.value === 'finished') {
+    stopReconnecting()
+    return
+  }
+  if (reconnectAttempt.value >= 20) {
+    isReconnecting.value = false
+    triggerNotification('❌ Не удалось переподключиться к серверу. Обновите страницу.', 'error', null)
+    return
+  }
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempt.value), 20000)
+  triggerNotification(`⚠️ Потеря соединения. Попытка переподключения (${reconnectAttempt.value + 1})...`, 'error', delay + 2000)
+  reconnectAttempt.value++
+  setTimeout(async () => {
+    if (isLeaving.value || gameState.value === 'finished') {
+      stopReconnecting()
+      return
+    }
+    try {
+      await apiClient.refreshWsToken()
+      initWebSocket()
+    } catch (err) {
+      doReconnect()
+    }
+  }, delay)
 }
 
 const clearGrids = () => {
@@ -1195,7 +1272,7 @@ const toggleReady = async () => {
 const handleEnemyCellShot = async (row, col) => {
   if (!canUserShoot.value) return
   if (enemyAttackGrid.value[row][col].status !== 'none' || enemyAttackGrid.value[row][col].animating) return
-  
+
   enemyAttackGrid.value[row][col].animating = true
 
   try {
@@ -1330,6 +1407,7 @@ const randomizeFleet = () => {
 
 const leaveLobby = async () => {
   isLeaving.value = true
+  stopReconnecting()
   emit('back-to-menu')
   try {
     await apiClient.leaveMatchmaking()
@@ -1375,30 +1453,37 @@ const getDockShipBoxStyle = (ship) => {
   return { width: `${w}px`, height: `${h}px`, flexShrink: '0' }
 }
 
-const getPlacedShipStyle = (ship) => {
+const getShipCellSize = () => {
   const gridEl = document.querySelector('.defense-grid .grid-cols-11')
-  if (!gridEl) return {}
-  const rect = gridEl.getBoundingClientRect()
-  const cellW = rect.width / 11
-  const cellH = rect.height / 11
+  if (!gridEl) return { cellW: 0, cellH: 0, offsetX: 0, offsetY: 0 }
+  const parent = gridEl.parentElement
+  const parentRect = parent.getBoundingClientRect()
+  const gridRect = gridEl.getBoundingClientRect()
+  const cellW = gridRect.width / 11
+  const cellH = gridRect.height / 11
+  const offsetX = gridRect.left - parentRect.left
+  const offsetY = gridRect.top - parentRect.top
+  return { cellW, cellH, offsetX, offsetY }
+}
+
+const getPlacedShipStyle = (ship) => {
+  const { cellW, cellH, offsetX, offsetY } = getShipCellSize()
+  if (!cellW) return {}
   return {
-    left: `${(ship.col + 1) * cellW}px`,
-    top: `${(ship.row + 1) * cellH}px`,
+    left: `${offsetX + (ship.col + 1) * cellW}px`,
+    top: `${offsetY + (ship.row + 1) * cellH}px`,
     width: ship.direction === 'horizontal' ? `${ship.size * cellW}px` : `${cellW}px`,
     height: ship.direction === 'vertical' ? `${ship.size * cellH}px` : `${cellH}px`,
   }
 }
 
 const getGameShipStyle = (ship) => {
-  const gridEl = document.querySelector('.defense-grid .grid-cols-11')
-  if (!gridEl) return {}
-  const rect = gridEl.getBoundingClientRect()
-  const cellW = rect.width / 11
-  const cellH = rect.height / 11
+  const { cellW, cellH, offsetX, offsetY } = getShipCellSize()
+  if (!cellW) return {}
   const sunkOpacity = ship.sunk ? 0.4 : 0.8
   return {
-    left: `${(ship.col + 1) * cellW}px`,
-    top: `${(ship.row + 1) * cellH}px`,
+    left: `${offsetX + (ship.col + 1) * cellW}px`,
+    top: `${offsetY + (ship.row + 1) * cellH}px`,
     width: ship.direction === 'horizontal' ? `${ship.size * cellW}px` : `${cellW}px`,
     height: ship.direction === 'vertical' ? `${ship.size * cellH}px` : `${cellH}px`,
     opacity: sunkOpacity,
@@ -1486,23 +1571,18 @@ const handleDragEnd = () => {
   activeHoverCells.value = []
 }
 
-const getRandomTop = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
-const resetFish1 = async () => { isFish1Active.value = false; fish1Top.value = getRandomTop(10, 42); await nextTick(); isFish1Active.value = true }
-const resetFish2 = async () => { isFish2Active.value = false; fish2Top.value = getRandomTop(55, 88); await nextTick(); isFish2Active.value = true }
-
 let lobbyPollInterval = null
 
 onMounted(async () => {
   parseMyIDFromToken()
   loadShipsPlacement()
+
   initWebSocket()
   document.addEventListener('keydown', handleGlobalKeydown)
   try {
     const profile = await apiClient.getProfile()
-    activeFish.value = profile.active_fish || []
-  } catch (_) {
-    // use default fish
-  }
+    activeFishIds.value = profile.active_fish || []
+  } catch (_) {}  
 
   // Poll for active games while searching (fallback if WS match_found is lost)
   lobbyPollInterval = setInterval(async () => {
@@ -1517,6 +1597,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  stopReconnecting()
   document.removeEventListener('keydown', handleGlobalKeydown)
   if (playAgainTimeout.value) {
     clearTimeout(playAgainTimeout.value)
@@ -1539,15 +1620,6 @@ onUnmounted(() => {
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 .animate-scale-pop { animation: scalePop 0.25s ease-out forwards; }
 @keyframes scalePop { from { transform: scale(0.94); opacity: 0.5; } to { transform: scale(1); opacity: 1; } }
-
-.fish { position: fixed; z-index: 99; pointer-events: none; will-change: transform; }
-.fish-1-container { right: -160px; animation: swim-right-left 14s linear forwards; }
-.fish-2-container { left: -160px; animation: swim-left-right 12s linear forwards; }
-.fish-wiggle { display: block; animation: fish-live-motion 2.5s ease-in-out infinite alternate; }
-
-@keyframes swim-right-left { 0% { transform: translateX(0); } 100% { transform: translateX(calc(-100vw - 320px)); } }
-@keyframes swim-left-right { 0% { transform: translateX(0); } 100% { transform: translateX(calc(100vw + 320px)); } }
-@keyframes fish-live-motion { 0% { transform: translateY(-6px) rotate(-5deg); } 100% { transform: translateY(10px) rotate(5deg); } }
 
 .shot-laser-target { background: radial-gradient(circle, rgba(239,68,68,0.8) 0%, rgba(0,0,0,0) 70%); border: 2px solid #ef4444; animation: laserScan 0.4s linear infinite alternate; }
 @keyframes laserScan { from { transform: scale(1.1); opacity: 0.5; } to { transform: scale(0.9); opacity: 1; } }

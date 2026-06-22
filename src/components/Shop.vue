@@ -27,18 +27,19 @@
             class="bg-gray-100 border border-gray-400 p-3 flex items-center justify-between"
             :class="{ 'opacity-50': ownedFish.has(fish.id) }">
             <div class="flex items-center gap-3">
-              <div class="w-10 h-10 bg-blue-200 rounded-full flex items-center justify-center text-lg">
-                🐟
+              <div class="w-12 h-12 bg-blue-900/10 rounded-lg flex items-center justify-center text-lg overflow-hidden border border-gray-300">
+                <img v-if="fishImage(fish.id)" :src="fishImage(fish.id)" class="w-full h-full object-contain" />
+                <span v-else>🐟</span>
               </div>
-              <div>
+              <div class="max-w-[280px]">
                 <p class="font-bold text-sm">{{ fish.name }}</p>
-                <p class="text-xs text-gray-500">ID: {{ fish.id }}</p>
+                <p class="text-[10px] text-gray-500 leading-tight">{{ fish.description }}</p>
               </div>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 shrink-0">
               <span class="text-sm font-bold">{{ fish.price }} 💰</span>
               <button v-if="!ownedFish.has(fish.id)"
-                @click="handleBuy(fish.id)"
+                @click.stop="handleBuy(fish.id)"
                 :disabled="buyingId === fish.id"
                 class="px-3 py-1 bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-xs font-bold hover:bg-[#c0bdb8] disabled:opacity-50">
                 {{ buyingId === fish.id ? '...' : 'Купить' }}
@@ -55,6 +56,28 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { apiClient } from '../api/client'
+
+import dvdImg from '../assets/images/fish/dvd_fish.png'
+import fuguImg from '../assets/images/fish/fugu_fish.png'
+import edImg from '../assets/images/fish/ed_kichigin_fish.png'
+import bobImg from '../assets/images/fish/fat_bob_fish.png'
+import octoImg from '../assets/images/fish/octopus_fish.png'
+import sharkImg from '../assets/images/fish/shark_fish.png'
+import anglerImg from '../assets/images/fish/angler_fish.png'
+import salmonImg from '../assets/images/fish/salmon_fish.png'
+
+const fishImages = {
+  dvd_fish: dvdImg,
+  fugu_fish: fuguImg,
+  ed_kichigin_fish: edImg,
+  fat_bob_fish: bobImg,
+  octopus_fish: octoImg,
+  shark_fish: sharkImg,
+  angler_fish: anglerImg,
+  salmon_fish: salmonImg,
+}
+
+const fishImage = (id) => fishImages[id] || null
 
 const emit = defineEmits(['close', 'profile-updated'])
 

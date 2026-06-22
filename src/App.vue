@@ -35,7 +35,7 @@
 
     <div v-else-if="isAuthorized && !isGameStarted" class="relative z-10 w-full max-w-xl p-4 animate-fade-in">
       <Lobby
-        v-if="!showLeaderboard && !showProfile && !showShop && !showInventory && !showMatchHistory"
+        v-if="!showLeaderboard && !showProfile && !showShop && !showInventory && !showMatchHistory && !showAchievements"
         :username="currentUsername" 
         @game-ready="startGameSession" 
         @logout="logout"
@@ -44,11 +44,13 @@
         @show-shop="showShop = true"
         @show-inventory="showInventory = true"
         @show-match-history="showMatchHistory = true"
+        @show-achievements="showAchievements = true"
       />
       <Shop v-else-if="showShop" @close="showShop = false" @profile-updated="handleProfileUpdate" />
       <Inventory v-else-if="showInventory" @close="showInventory = false" @profile-updated="handleProfileUpdate" />
       <Leaderboard v-else-if="showLeaderboard" @close="showLeaderboard = false" />
       <MatchHistory v-else-if="showMatchHistory" @close="showMatchHistory = false" />
+      <Achievements v-else-if="showAchievements" @close="showAchievements = false" @balance-updated="handleAchievementBalanceUpdate" />
       <Profile v-else @close="showProfile = false" @username-changed="(name) => currentUsername = name" />
     </div>
 
@@ -60,12 +62,13 @@
       @back-to-menu="apiClient.leaveMatchmaking().catch(() => {}); isGameStarted = false; isLobbyWait = false; currentLobbyId = ''; clearGameState()"
     />
 
+    <AchievementToast :achievement="achievementToast" @close="achievementToast = null" />
     <AudioPlayer />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, provide, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import AuthForm from './components/AuthForm.vue'
 import Lobby from './components/Lobby.vue' 
 import GameBoard from './components/GameBoard.vue' 
@@ -74,6 +77,8 @@ import Profile from './components/Profile.vue'
 import Shop from './components/Shop.vue'
 import Inventory from './components/Inventory.vue'
 import MatchHistory from './components/MatchHistory.vue'
+import Achievements from './components/Achievements.vue'
+import AchievementToast from './components/AchievementToast.vue'
 import AudioPlayer from './components/AudioPlayer.vue'
 import { apiClient } from './api/client' // Импортируем исправленный клиент
 import Hls from 'hls.js'
@@ -90,7 +95,14 @@ const showProfile = ref(false)
 const showShop = ref(false)
 const showInventory = ref(false)
 const showMatchHistory = ref(false)
+const showAchievements = ref(false)
 const currentUsername = ref('CyberCommander')
+
+const achievementToast = ref(null)
+const showAchievementToast = (ach) => {
+  achievementToast.value = ach
+}
+provide('showAchievementToast', showAchievementToast)
 
 const videoRef = ref(null)
 let hlsInstance = null
@@ -110,6 +122,10 @@ const handleProfileUpdate = (data) => {
   // Profile was updated (shop/inventory changed); nothing to sync at app level
 }
 
+const handleAchievementBalanceUpdate = (newBalance) => {
+  // Balance updated after claiming achievement reward
+}
+
 const saveGameState = () => {
   try {
     localStorage.setItem('activeGameId', activeGameId.value)
@@ -120,6 +136,7 @@ const saveGameState = () => {
     localStorage.setItem('showProfile', showProfile.value ? '1' : '')
     localStorage.setItem('showLeaderboard', showLeaderboard.value ? '1' : '')
     localStorage.setItem('showInventory', showInventory.value ? '1' : '')
+    localStorage.setItem('showAchievements', showAchievements.value ? '1' : '')
   } catch {}
 }
 
@@ -135,6 +152,7 @@ const restoreGameState = () => {
       showProfile.value = localStorage.getItem('showProfile') === '1'
       showLeaderboard.value = localStorage.getItem('showLeaderboard') === '1'
       showInventory.value = localStorage.getItem('showInventory') === '1'
+      showAchievements.value = localStorage.getItem('showAchievements') === '1'
     }
   } catch {}
 }
@@ -149,6 +167,7 @@ const clearGameState = () => {
     localStorage.removeItem('showProfile')
     localStorage.removeItem('showLeaderboard')
     localStorage.removeItem('showInventory')
+    localStorage.removeItem('showAchievements')
   } catch {}
 }
 
@@ -166,6 +185,7 @@ const logout = async () => {
   showProfile.value = false
   showShop.value = false
   showInventory.value = false
+  showAchievements.value = false
   isStartScreen.value = true
   clearGameState()
 }

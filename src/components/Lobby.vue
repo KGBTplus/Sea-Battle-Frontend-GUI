@@ -18,6 +18,9 @@
         <button @click="$emit('show-match-history')" class="bg-[#d4d0c8] text-black border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] px-4 py-2 hover:bg-gray-200 active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-sm whitespace-nowrap font-bold">
           📜 ИСТОРИЯ
         </button>
+        <button @click="$emit('show-achievements')" class="bg-[#d4d0c8] text-black border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] px-4 py-2 hover:bg-gray-200 active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-sm whitespace-nowrap font-bold">
+          🏆 ДОСТИЖЕНИЯ
+        </button>
         <button @click="$emit('show-profile')" class="bg-[#d4d0c8] text-black border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] px-4 py-2 hover:bg-gray-200 active:border-t-[#404040] active:border-l-[#404040] active:border-b-[#fff] active:border-r-[#fff] text-sm whitespace-nowrap font-bold">
           👤 ПРОФИЛЬ
         </button>
@@ -108,7 +111,7 @@ const props = defineProps({
   username: { type: String, default: 'CyberCommander' }
 })
 
-const emit = defineEmits(['game-ready', 'logout', 'show-leaderboard', 'show-profile', 'show-shop', 'show-inventory', 'show-match-history'])
+const emit = defineEmits(['game-ready', 'logout', 'show-leaderboard', 'show-profile', 'show-shop', 'show-inventory', 'show-match-history', 'show-achievements'])
 const lobbyError = ref('')
 const isSearching = ref(false)
 const lobbies = ref([])

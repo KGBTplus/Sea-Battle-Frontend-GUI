@@ -28,11 +28,11 @@
         </span>
         <!-- Coins change -->
         <span class="font-bold w-24 text-center" :class="coinsColor(m.coins_change)">
-          {{ coinsLabel(m.coins_change) }}
+          🪙 {{ coinsLabel(m.coins_change) }}
         </span>
         <!-- Opponent -->
         <span class="w-28 text-center text-gray-600 truncate" :title="m.opponent_name" style="font-family: Tahoma, 'MS Sans Serif', Verdana, sans-serif;">
-          {{ m.opponent_name || '—' }}
+          ⚔️ {{ m.opponent_name || '—' }}
         </span>
         <!-- Time -->
         <span class="w-28 text-right" style="color: #aaa;">
