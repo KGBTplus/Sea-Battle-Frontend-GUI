@@ -3,12 +3,7 @@
     
     <img :src="sceneryUrl" class="absolute top-0 left-0 w-full h-full object-cover z-0 pointer-events-none opacity-40" />
 
-    <div v-if="isFish1Active" class="absolute fish fish-1-container" :style="{ top: fish1Top + '%' }" @animationend="resetFish1">
-      <img :src="fish1Url" alt="Fish 1" class="w-[100px] md:w-[130px] h-auto fish-wiggle drop-shadow-[4px_10px_5px_rgba(0,0,0,0.5)]" />
-    </div>
-    <div v-if="isFish2Active" class="absolute fish fish-2-container" :style="{ top: fish2Top + '%' }" @animationend="resetFish2">
-      <img :src="fish2Url" alt="Fish 2" class="w-[100px] md:w-[130px] h-auto fish-wiggle drop-shadow-[-4px_10px_5px_rgba(0,0,0,0.5)]" />
-    </div>
+    <FishRenderer :activeFishIds="activeFishIds" />
 
     <div class="relative z-10 w-full max-w-7xl p-4 flex flex-col items-center justify-center animate-fade-in gap-6">
       
@@ -16,17 +11,39 @@
         <h3 class="text-lg font-bold font-mono tracking-wide" :class="getStatusColorClass">
           {{ getStatusMessage }}
         </h3>
-        <p v-if="opponentName && gameState !== 'searching' && gameState !== 'placement'" class="text-xs font-mono text-gray-600 mt-1">
-          ⚔️ {{ opponentName }}
-        </p>
+        <div v-if="placementSecondsLeft !== null && (gameState === 'placement' || gameState === 'waiting')" class="mt-2 font-mono text-sm font-bold"
+             :class="placementSecondsLeft <= 10 ? 'text-red-600 animate-pulse' : 'text-amber-700'">
+          ⏱ РАССТАНОВКА: {{ formatTime(placementSecondsLeft) }}
+        </div>
+
+        <div v-else-if="turnSecondsLeft !== null && (gameState === 'player-turn' || gameState === 'enemy-turn')" class="mt-2 flex justify-center gap-6 text-sm font-mono font-bold">
+          <span :class="myPlayerID === currentTurnId ? 'text-green-700' : 'text-gray-500'">
+            🎯 ВАШ ХОД: {{ myPlayerID === currentTurnId ? formatTime(turnSecondsLeft) : '—' }}
+          </span>
+          <span :class="myPlayerID !== currentTurnId ? 'text-red-700' : 'text-gray-500'">
+            🛡️ СОПЕРНИК: {{ myPlayerID !== currentTurnId ? formatTime(turnSecondsLeft) : '—' }}
+          </span>
+        </div>
       </div>
 
       <div v-if="gameState === 'finished'" class="w-full max-w-4xl flex flex-col items-center gap-3">
-        <button @click="goBackToMenu"
-          class="bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] px-8 py-3 font-faero text-lg text-black tracking-wider cursor-pointer hover:brightness-110 active:brightness-95 shadow-md transition-all">
-          🎮 PLAY AGAIN
-        </button>
-        <p class="font-mono text-xs text-gray-500">Автоматически через 5 секунд...</p>
+        <div class="w-full bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-4 text-center shadow-md">
+          <h2 class="text-2xl font-faero mb-2" :class="resultColorClass">{{ resultMessage }}</h2>
+          <p class="text-sm font-mono mb-3" :class="rewardColorClass">{{ rewardMessage }}</p>
+          <div class="flex flex-col items-center gap-2">
+            <button @click="toggleRevanch"
+              class="px-6 py-3 text-lg font-faero text-black bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#000] border-r-[#000] active:border-t-[#000] active:border-l-[#000] active:border-b-[#fff] active:border-r-[#fff] shadow-md hover:bg-gray-100 tracking-widest transition-all"
+              :class="{ 'btn--dimmed': isRevanchReady }">
+              {{ isRevanchReady ? '✔ ГОТОВ К РЕВАНШУ' : '⚔ ИГРАТЬ СНОВА' }}
+            </button>
+            <p v-if="revanchOpponentReady" class="text-xs font-mono text-green-700">Соперник готов к реваншу!</p>
+            <button @click="forceLeaveToLobby"
+              class="px-6 py-2 text-sm font-faero text-red-700 bg-gray-200 border border-red-400 hover:bg-red-100 active:bg-red-200 tracking-wider transition-colors">
+              🚪 ВЕРНУТЬСЯ В ЛОББИ
+            </button>
+          </div>
+          <p class="font-mono text-xs text-gray-500 mt-2">возвращение в лобби через {{ countdown }} сек...</p>
+        </div>
       </div>
 
       <div class="w-full max-w-4xl min-h-[3rem] flex items-stretch">
@@ -34,25 +51,23 @@
               :class="notificationType === 'error' ? 'text-red-700 border-red-500 bg-red-50' : 'text-green-700 border-green-500 bg-green-50'">
           {{ notificationMessage }}
         </div>
+        <div v-if="opponentReconnectTimer !== null" class="w-full bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-3 text-center shadow-md font-mono text-xs font-bold uppercase tracking-wider">
+          ⏳ Соперник временно отключился. Ожидание переподключения... ({{ opponentReconnectTimer }}с)
+        </div>
       </div>
 
       <div class="flex flex-col xl:flex-row gap-8 w-full justify-center items-stretch">
         
         <div class="w-full xl:w-[340px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-4 text-black flex flex-col shadow-sm">
           <template v-if="myStats && (gameState === 'player-turn' || gameState === 'enemy-turn' || gameState === 'waiting' || gameState === 'finished')">
-            <h2 class="text-lg font-faero mb-2 text-center border-b-2 border-gray-400 pb-1 tracking-wide">📊 {{ myUsername }}</h2>
+            <h2 class="text-lg mb-2 text-center border-b-2 border-gray-400 pb-1 tracking-wide"
+              style="font-family: Tahoma, 'MS Sans Serif', Verdana, sans-serif;">📊 {{ myUsername }}</h2>
             <div class="text-[10px] font-mono space-y-1 bg-gray-200 p-2 border border-gray-400 flex-grow">
               <div class="flex justify-between"><span>Игр:</span><span class="font-bold">{{ myStats.total_games }}</span></div>
-              <div class="flex justify-between"><span>Побед:</span><span class="font-bold text-green-700">{{ myStats.wins }}</span></div>
-              <div class="flex justify-between"><span>Поражений:</span><span class="font-bold text-red-700">{{ myStats.losses }}</span></div>
-              <div class="flex justify-between"><span>Потоплено:</span><span class="font-bold">{{ myStats.ships_sunk }}</span></div>
-              <div class="flex justify-between"><span>Выстрелов:</span><span class="font-bold">{{ myStats.total_shots }}</span></div>
-              <div class="flex justify-between"><span>Попаданий:</span><span class="font-bold text-emerald-700">{{ myStats.hits }}</span></div>
-              <div class="border-t border-gray-400 my-1"></div>
               <div class="flex justify-between"><span>% побед:</span><span class="font-bold">{{ (myStats.win_percentage || 0).toFixed(1) }}%</span></div>
               <div class="flex justify-between"><span>% попаданий:</span><span class="font-bold">{{ (myStats.hit_percentage || 0).toFixed(1) }}%</span></div>
               <div class="border-t border-gray-400 my-1"></div>
-              <div class="font-bold text-xs mb-1">Мои корабли:</div>
+              <div class="font-bold text-xs mb-1">Кораблей осталось:</div>
               <div class="flex justify-between"><span>4-палубный:</span><span class="font-bold">{{ myShipsAlive[4] || 0 }}</span></div>
               <div class="flex justify-between"><span>3-палубных:</span><span class="font-bold">{{ myShipsAlive[3] || 0 }}</span></div>
               <div class="flex justify-between"><span>2-палубных:</span><span class="font-bold">{{ myShipsAlive[2] || 0 }}</span></div>
@@ -63,7 +78,11 @@
             <h2 class="text-xl font-faero mb-3 text-center border-b-2 border-gray-400 pb-2 tracking-wide">SHIP DOCK</h2>
             
              <div class="text-[10px] font-mono mb-3 text-center text-gray-600 bg-gray-200 p-2 border border-gray-400">
-              <template v-if="gameState === 'placement'">
+              <template v-if="isReady">
+                <p class="font-bold text-green-800">✔ Флот зафиксирован</p>
+                <p class="text-xs mt-1">Ожидаем готовности оппонента.</p>
+              </template>
+              <template v-else-if="gameState === 'placement'">
                 <p class="font-bold text-blue-800">⚓ Расстановка:</p>
                 <p>Тащите корабль из дока на поле, либо тащите с поля на новое место!</p>
                 <p class="font-bold text-emerald-800 mt-1">🔄 Поворот:</p>
@@ -81,10 +100,10 @@
             </div>
             
             <div class="flex flex-wrap gap-3 justify-center items-center overflow-y-auto flex-grow max-h-[450px] p-3 bg-gray-300/50 border border-inset border-gray-400">
-              <template v-for="ship in availableShips" :key="ship.id">
+              <template v-if="!isReady" v-for="ship in availableShips" :key="ship.id">
                 <div 
                   v-if="!ship.placed"
-                  :draggable="gameState === 'placement'"
+                  :draggable="gameState === 'placement' && !isReady"
                   @dragstart="handleDragStart($event, ship, 'dock')"
                   @dragend="handleDragEnd"
                   @click="toggleDockShipDirection(ship)"
@@ -103,13 +122,13 @@
         <div class="w-full max-w-[500px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-6 text-black shadow-md">
           <h2 class="text-2xl font-faero mb-4 text-center border-b-2 border-gray-400 pb-2 tracking-wide">YOUR FLEET</h2>
           
-          <div class="w-full aspect-square border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] p-2 relative"
+          <div class="w-full aspect-square border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] p-2 relative overflow-hidden defense-grid"
                :style="{ backgroundImage: `url(${water1Url})`, backgroundSize: 'cover', backgroundPosition: 'center' }">
             
             <div 
               v-for="ship in placedShips" 
               :key="'placed-'+ship.id"
-              :draggable="gameState === 'placement'"
+              :draggable="gameState === 'placement' && !isReady"
               @dragstart="handleDragStart($event, ship, 'board')"
               @dragend="handleDragEnd"
               @click="handlePlacedShipClick(ship)"
@@ -117,12 +136,21 @@
               @dblclick="removeShipFromBoard(ship)"
                class="absolute border border-white/40 shadow-md overflow-hidden bg-blue-950/20 transition-all duration-75"
               :class="[
-                gameState === 'placement' ? 'z-20 cursor-grab active:cursor-grabbing hover:brightness-125 hover:scale-[1.02] pointer-events-auto' : 'z-0 cursor-default pointer-events-none',
+                gameState === 'placement' && !isReady ? 'z-20 cursor-grab active:cursor-grabbing hover:brightness-125 hover:scale-[1.02] pointer-events-auto' : 'z-20 cursor-default pointer-events-none',
                 { 'pointer-events-none': isDragging }
               ]"
               :style="getPlacedShipStyle(ship)"
             >
-              <img :src="getShipImage(ship.size, ship.direction)" class="pointer-events-none w-full h-full object-fill absolute inset-0" />
+              <img :src="getShipImage(ship.size, ship.direction)" loading="eager" draggable="false" class="pointer-events-none w-full h-full object-fill absolute inset-0 select-none" />
+            </div>
+
+            <div 
+              v-for="ship in gamePlayerShips" 
+              :key="'game-'+ship.id"
+              class="absolute z-15 overflow-hidden bg-blue-950/20 pointer-events-none"
+              :style="getGameShipStyle(ship)"
+            >
+              <img :src="getShipImage(ship.size, ship.direction)" loading="eager" draggable="false" class="pointer-events-none w-full h-full object-fill absolute inset-0 select-none" />
             </div>
 
             <div class="relative z-10 w-full h-full grid grid-cols-11 grid-rows-11 text-center items-center text-sm font-bold text-white bg-blue-950/20"
@@ -131,21 +159,22 @@
               <div v-for="letter in letters" :key="letter">{{ letter }}</div>
               
               <template v-for="rowIdx in 10" :key="rowIdx">
-                <div class="text-right pr-2 text-black font-mono bg-[#d4d0c8]/80 h-full flex items-center justify-end border-r border-gray-400">{{ rowIdx }}</div>
+                <div class="text-center text-[11px] leading-none font-bold font-mono text-white bg-[#0b2b5e] w-5 h-full flex items-center justify-center border-r border-blue-800">{{ rowIdx }}</div>
                 <div 
                   v-for="colIdx in 10" 
                   :key="colIdx"
-                  class="w-full h-full aspect-square border border-white/10 relative flex items-center justify-center"
-                  :class="{ 
-                    'bg-cyan-500/40': gameState === 'placement' && isCellHovered(rowIdx - 1, colIdx - 1), 
-                    'bg-red-500/50': gameState === 'placement' && isCellHoverInvalid(rowIdx - 1, colIdx - 1) 
-                  }"
+                  class="w-full h-full aspect-square border relative flex items-center justify-center"
+                  :class="[ 
+                    gameState === 'placement' && isCellHovered(rowIdx - 1, colIdx - 1) ? 'bg-green-500/40' : '',
+                    gameState === 'placement' && isCellHoverInvalid(rowIdx - 1, colIdx - 1) ? 'bg-red-500/50' : '',
+                    'border-white/30'
+                  ]"
                   @dragover.prevent="handleDragOver(rowIdx - 1, colIdx - 1)"
                   @drop="handleDrop(rowIdx - 1, colIdx - 1)"
                 >
                   <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'hit'" class="text-base z-30 filter drop-shadow animate-scale-pop">💥</span>
                   <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'miss'" class="text-xs z-30 text-cyan-300 font-mono">⭕</span>
-                  <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'destroyed'" class="text-base z-30 animate-scale-pop">💀</span>
+                  <span v-if="playerDefenseGrid[rowIdx - 1][colIdx - 1] === 'destroyed'" class="text-base z-50 animate-scale-pop">💀</span>
                 </div>
               </template>
             </div>
@@ -154,7 +183,7 @@
 
         <div class="w-full max-w-[500px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-6 text-black shadow-md">
           <h2 class="text-2xl font-faero mb-4 text-center border-b-2 border-gray-400 pb-2 tracking-wide">
-            ENEMY FLEET <span v-if="opponentName" class="text-sm text-gray-600">({{ opponentName }})</span>
+            ENEMY FLEET
           </h2>
           
           <div class="w-full aspect-square border-2 border-t-[#808080] border-l-[#808080] border-b-[#fff] border-r-[#fff] p-2 relative"
@@ -165,20 +194,20 @@
               <div v-for="letter in letters" :key="letter">{{ letter }}</div>
               
               <template v-for="rowIdx in 10" :key="rowIdx">
-                <div class="text-right pr-2 text-black font-mono bg-[#d4d0c8]/80 h-full flex items-center justify-end border-r border-gray-400">{{ rowIdx }}</div>
+                <div class="text-center text-[11px] leading-none font-bold font-mono text-white bg-[#0b2b5e] w-5 h-full flex items-center justify-center border-r border-blue-800">{{ rowIdx }}</div>
                 <div 
                   v-for="colIdx in 10" 
                   :key="colIdx"
-                  class="w-full h-full aspect-square border border-white/10 bg-lime-500/5 hover:bg-lime-400/30 transition-colors duration-100 relative flex items-center justify-center overflow-hidden"
+                  class="w-full h-full aspect-square border border-white/30 bg-lime-500/5 hover:bg-lime-400/30 transition-colors duration-100 relative flex items-center justify-center overflow-hidden"
                   :class="canUserShoot ? 'cursor-crosshair' : 'cursor-not-allowed opacity-80'"
                   @click="handleEnemyCellShot(rowIdx - 1, colIdx - 1)"
                 >
                   <div v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].animating" class="absolute inset-0 z-30 shot-laser-target"></div>
                   <div v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].exploding" class="absolute inset-0 z-40 explosion-flash"></div>
                   
-                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'hit'" class="text-base z-10 filter drop-shadow animate-scale-pop">💥</span>
-                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'miss'" class="text-xs z-10 text-cyan-300 font-mono animate-fade-in">⭕</span>
-                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'destroyed'" class="text-base z-10 animate-scale-pop">💀</span>
+                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'hit'" class="text-base z-30 filter drop-shadow animate-scale-pop">💥</span>
+                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'miss'" class="text-xs z-30 text-cyan-300 font-mono animate-fade-in">⭕</span>
+                  <span v-if="enemyAttackGrid[rowIdx - 1][colIdx - 1].status === 'destroyed'" class="text-base z-50 animate-scale-pop">💀</span>
                 </div>
               </template>
             </div>
@@ -186,15 +215,10 @@
         </div>
 
         <div v-if="opponentStats && (gameState === 'player-turn' || gameState === 'enemy-turn' || gameState === 'waiting' || gameState === 'finished')" class="w-full xl:w-[240px] bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#404040] border-r-[#404040] p-4 text-black flex flex-col shadow-sm">
-          <h2 class="text-lg font-faero mb-2 text-center border-b-2 border-gray-400 pb-1 tracking-wide">📊 {{ opponentName || 'Соперник' }}</h2>
+          <h2 class="text-lg mb-2 text-center border-b-2 border-gray-400 pb-1 tracking-wide"
+              style="font-family: Tahoma, 'MS Sans Serif', Verdana, sans-serif;">📊 {{ opponentName || 'Соперник' }}</h2>
           <div class="text-[10px] font-mono space-y-1 bg-gray-200 p-2 border border-gray-400 flex-grow">
             <div class="flex justify-between"><span>Игр:</span><span class="font-bold">{{ opponentStats.total_games }}</span></div>
-            <div class="flex justify-between"><span>Побед:</span><span class="font-bold text-green-700">{{ opponentStats.wins }}</span></div>
-            <div class="flex justify-between"><span>Поражений:</span><span class="font-bold text-red-700">{{ opponentStats.losses }}</span></div>
-            <div class="flex justify-between"><span>Потоплено:</span><span class="font-bold">{{ opponentStats.ships_sunk }}</span></div>
-            <div class="flex justify-between"><span>Выстрелов:</span><span class="font-bold">{{ opponentStats.total_shots }}</span></div>
-            <div class="flex justify-between"><span>Попаданий:</span><span class="font-bold text-emerald-700">{{ opponentStats.hits }}</span></div>
-            <div class="border-t border-gray-400 my-1"></div>
             <div class="flex justify-between"><span>% побед:</span><span class="font-bold">{{ (opponentStats.win_percentage || 0).toFixed(1) }}%</span></div>
             <div class="flex justify-between"><span>% попаданий:</span><span class="font-bold">{{ (opponentStats.hit_percentage || 0).toFixed(1) }}%</span></div>
             <div class="border-t border-gray-400 my-1"></div>
@@ -204,9 +228,9 @@
             <div class="flex justify-between"><span>2-палубных:</span><span class="font-bold">{{ opponentShipsAlive[2] || 0 }}</span></div>
             <div class="flex justify-between"><span>1-палубных:</span><span class="font-bold">{{ opponentShipsAlive[1] || 0 }}</span></div>
           </div>
-          <button v-if="gameState === 'player-turn' || gameState === 'enemy-turn'"
+          <button v-if="gameState === 'player-turn' || gameState === 'enemy-turn' || gameState === 'waiting'"
             @click="forfeitGame"
-            class="mt-2 w-full py-1 text-xs font-faero text-gray-600 bg-gray-300 border border-gray-400 hover:bg-gray-400 transition-colors tracking-wider"
+            class="mt-2 w-full py-1 text-xs font-faero text-red-700 bg-red-100 border border-red-300 hover:bg-red-200 transition-colors tracking-wider"
           >
             Сдаться
           </button>
@@ -214,56 +238,122 @@
 
       </div>
 
-      <div v-if="allShipsPlaced && gameState === 'placement'" class="w-full max-w-xs animate-bounce-short z-30 mt-4">
+      <div v-if="allShipsPlaced && gameState === 'placement'" class="w-full max-w-xs z-30 mt-4 flex flex-col items-center gap-3">
         <button 
-          @click="sendShipsToServer"
-          class="w-full py-4 text-xl font-faero text-black bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#000] border-r-[#000] active:border-t-[#000] active:border-l-[#000] active:border-b-[#fff] active:border-r-[#fff] shadow-md hover:bg-gray-100 transition-colors tracking-widest"
+          @click="toggleReady"
+          :disabled="isSending"
+          class="w-full py-4 text-xl font-faero text-black bg-[#d4d0c8] border-2 border-t-[#fff] border-l-[#fff] border-b-[#000] border-r-[#000] active:border-t-[#000] active:border-l-[#000] active:border-b-[#fff] active:border-r-[#fff] shadow-md hover:bg-gray-100 tracking-widest disabled:opacity-50 disabled:cursor-wait"
+          :class="{ 'btn--dimmed': isReady }"
         >
-          CONFIRM FLEET
+          {{ isReady ? '✔ ГОТОВ' : '⚓ ГОТОВ' }}
         </button>
       </div>
 
-
+      <div v-if="gameState === 'placement' || gameState === 'waiting' || gameState === 'searching'" class="w-full max-w-xs mt-2">
+        <button @click="leaveLobby"
+          class="w-full py-2 text-sm font-faero text-red-700 bg-gray-200 border border-red-400 hover:bg-red-100 active:bg-red-200 tracking-wider transition-colors"
+        >
+          🚪 ПОКИНУТЬ ИГРУ
+        </button>
+      </div>
 
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { ref, computed, inject, nextTick, onMounted, onUnmounted } from 'vue'
 import { apiClient } from '../api/client' // ИСПРАВЛЕНО: Импортируем наш обновленный клиент
+import FishRenderer from './fish/FishRenderer.vue'
 
 // Импорт графических ассетов
 import sceneryUrl from '../assets/images/scenery.jpeg'
-import fish1Url from '../assets/images/fish1.png'
-import fish2Url from '../assets/images/fish2.png'
 import water1Url from '../assets/images/water1.gif'
 import water2Url from '../assets/images/water2.gif'
 
-import ship1hor from '../assets/images/ship1hor.jpeg'
-import ship1vert from '../assets/images/ship1vert.jpeg'
-import ship2hor from '../assets/images/ship2hor.jpeg'
-import ship2vert from '../assets/images/ship2vert.jpeg'
-import ship3hor from '../assets/images/ship3hor.jpeg'
-import ship3vert from '../assets/images/ship3vert.jpeg'
-import ship4hor from '../assets/images/ship4hor.jpeg'
-import ship4vert from '../assets/images/ship4vert.jpeg'
+import ship1hor from '../assets/images/ship1hor.png'
+import ship1vert from '../assets/images/ship1vert.png'
+import ship2hor from '../assets/images/ship2hor.png'
+import ship2vert from '../assets/images/ship2vert.png'
+import ship3hor from '../assets/images/ship3hor.png'
+import ship3vert from '../assets/images/ship3vert.png'
+import ship4hor from '../assets/images/ship4hor.png'
+import ship4vert from '../assets/images/ship4vert.png'
 
 const props = defineProps({
-  gameId: { type: String, default: '' }, // Может быть пустым при поиске
-  isLobbyWait: { type: Boolean, default: false }
+  gameId: { type: String, default: '' },
+  isLobbyWait: { type: Boolean, default: false },
+  lobbyId: { type: String, default: '' }
 })
 const emit = defineEmits(['back-to-menu'])
 
+const showAchievementToast = inject('showAchievementToast', () => {})
+
 const playAgainTimeout = ref(null)
+const countdown = ref(20)
+let countdownInterval = null
+
+const startCountdown = () => {
+  countdown.value = 20
+  if (countdownInterval) clearInterval(countdownInterval)
+  countdownInterval = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      clearInterval(countdownInterval)
+      countdownInterval = null
+      goBackToMenu()
+    }
+  }, 1000)
+}
+
+const handleGlobalKeydown = (e) => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return
+  if (e.key === 'Enter' && gameState.value === 'placement' && allShipsPlaced.value) {
+    e.preventDefault()
+    toggleReady()
+  }
+}
 
 const goBackToMenu = () => {
+  isLeaving.value = true
+  stopReconnecting()
   if (playAgainTimeout.value) {
     clearTimeout(playAgainTimeout.value)
     playAgainTimeout.value = null
   }
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
+  countdown.value = 20
+  placementSecondsLeft.value = null
+  turnSecondsLeft.value = null
+  isRevanchReady.value = false
+  revanchOpponentReady.value = false
+  gameReward.value = null
+  clearGrids()
+  clearShipsPlacement()
+  localGameId.value = ''
   emit('back-to-menu')
 }
+
+const toggleRevanch = () => {
+  isRevanchReady.value = !isRevanchReady.value
+  if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+    socket.value.send(JSON.stringify({ type: 'toggle_revanch' }))
+  }
+}
+
+const forceLeaveToLobby = () => {
+  isLeaving.value = true
+  stopReconnecting()
+  if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+    socket.value.send(JSON.stringify({ type: 'force_leave_to_lobby' }))
+  }
+  goBackToMenu()
+}
+
+
 
 // Локальная копия ID игры, так как props изменять напрямую нельзя
 const localGameId = ref(props.gameId || '')
@@ -288,10 +378,7 @@ const triggerNotification = (msg, type = 'success', timeout = 5000) => {
   }
 }
 
-const fish1Top = ref(20)
-const fish2Top = ref(70)
-const isFish1Active = ref(true)
-const isFish2Active = ref(true)
+const activeFishIds = ref([])
 
 // Статусы для матчмейкинга: 'searching', 'placement', 'waiting', 'player-turn', 'enemy-turn', 'finished'
 const gameState = ref('searching') 
@@ -300,6 +387,58 @@ const myPlayerID = ref(null)
 
 const socket = ref(null)
 let pingInterval = null // Переменная для таймера Heartbeat
+
+const isReady = ref(false)
+const isSending = ref(false)
+
+const placementSecondsLeft = ref(null)
+const turnSecondsLeft = ref(null)
+const currentTurnId = ref(null)
+
+const formatTime = (seconds) => {
+  if (seconds === null || seconds === undefined) return '—'
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
+
+const SHIPS_STORAGE_KEY = 'placed_ships'
+
+const saveShipsPlacement = () => {
+  try {
+    const data = availableShips.value.map(s => ({
+      id: s.id, size: s.size, placed: s.placed,
+      row: s.row, col: s.col, direction: s.direction
+    }))
+    localStorage.setItem(SHIPS_STORAGE_KEY, JSON.stringify(data))
+  } catch (e) {
+    console.warn('Failed to save ship placement:', e)
+  }
+}
+
+const loadShipsPlacement = () => {
+  try {
+    const raw = localStorage.getItem(SHIPS_STORAGE_KEY)
+    if (!raw) return false
+    const data = JSON.parse(raw)
+    data.forEach(saved => {
+      const ship = availableShips.value.find(s => s.id === saved.id)
+      if (ship) {
+        ship.placed = saved.placed
+        ship.row = saved.row
+        ship.col = saved.col
+        ship.direction = saved.direction
+      }
+    })
+    return true
+  } catch { return false }
+}
+
+const clearShipsPlacement = () => {
+  try {
+    localStorage.removeItem(SHIPS_STORAGE_KEY)
+  } catch {}
+}
 
 // Инициализация сетки атак (правой)
 const enemyAttackGrid = ref(
@@ -339,8 +478,20 @@ const originalCol = ref(null)
 const activeHoverCells = ref([])
 const isHoverInvalid = ref(false)
 const isDragging = ref(false)
+const isLeaving = ref(false)
+const isReconnecting = ref(false)
+const reconnectAttempt = ref(0)
+const opponentReconnectTimer = ref(null)
 const processedMovesCount = ref(0)
 const lastGameData = ref(null)
+
+// Revanch / game-over state
+const isRevanchReady = ref(false)
+const revanchOpponentReady = ref(false)
+const gameResult = ref('')
+const gameReward = ref(null)
+const perfectWin = ref(false)
+const playerHits = ref(0)
 
 const placedShips = computed(() => availableShips.value.filter(s => s.placed))
 const allShipsPlaced = computed(() => availableShips.value.every(s => s.placed))
@@ -371,23 +522,56 @@ const opponentShipsAlive = computed(() => {
   return computeShipsAlive(lastGameData.value.ships, opponentID)
 })
 
+const gamePlayerShips = computed(() => {
+  if (!lastGameData.value || !myPlayerID.value) return []
+  if (gameState.value === 'placement' || gameState.value === 'searching' || gameState.value === 'finished') return []
+  const ships = lastGameData.value.ships || []
+  return ships
+    .filter(s => s.player_id === myPlayerID.value)
+    .map(s => ({
+      id: s.id,
+      size: s.size,
+      direction: s.direction,
+      row: s.row,
+      col: s.col,
+      sunk: s.sunk
+    }))
+})
+
 const canUserShoot = computed(() => {
   return gameState.value === 'player-turn' && currentTurnPlayerID.value === myPlayerID.value
 })
 
+const resultMessage = computed(() => {
+  if (gameResult.value === 'draw') return '🤝 НИЧЬЯ!'
+  if (gameResult.value === 'win') return '🏆 ПОБЕДА!'
+  if (gameResult.value === 'lose') return '💥 ПОРАЖЕНИЕ'
+  return '🏁 ИГРА ЗАВЕРШЕНА'
+})
+
+const resultColorClass = computed(() => {
+  if (gameResult.value === 'win') return 'text-win'
+  if (gameResult.value === 'draw') return 'text-neutral'
+  if (gameResult.value === 'lose') return 'text-loss'
+  return 'text-neutral'
+})
+
+const rewardMessage = computed(() => {
+  if (gameReward.value === null) return ''
+  const sign = gameReward.value >= 0 ? '+' : ''
+  const bonusText = perfectWin.value ? ' (идеальная победа!)' : ''
+  return `${sign}${gameReward.value} монет${bonusText}`
+})
+
+const rewardColorClass = computed(() => {
+  if (gameReward.value === null || gameReward.value === 0) return 'text-neutral'
+  return gameReward.value > 0 ? 'reward-positive' : 'reward-negative'
+})
+
 const parseMyIDFromToken = () => {
-  const token = localStorage.getItem('token') // ИСПРАВЛЕНО: 'token' вместо 'auth_token'
-  if (!token) return
-  try {
-    const base64Url = token.split('.')[1]
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-    }).join(''))
-    const claims = JSON.parse(jsonPayload)
-    myPlayerID.value = claims.sub || claims.id
-  } catch (e) {
-    console.error("Не удалось декодировать JWT token:", e)
+  const uid = localStorage.getItem('user_id')
+  if (uid) {
+    myPlayerID.value = uid
   }
 }
 
@@ -395,12 +579,14 @@ const parseMyIDFromToken = () => {
  * ИНИЦИАЛИЗАЦИЯ WEBSOCKET С УЧЕТОМ НОВОГО МАТЧМЕЙКИНГА И KEEP-ALIVE
  */
 const initWebSocket = () => {
-  const token = localStorage.getItem('token') || '' // ИСПРАВЛЕНО: 'token' вместо 'auth_token'
+  console.log('[WS] Initializing WebSocket, gameState:', gameState.value, 'gameId:', localGameId.value)
+  const token = apiClient.getWsToken() || ''
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const wsUrl = `${protocol}//${window.location.host}/ws?token=${token}`
+  const wsUrl = `${protocol}//${window.location.host}/ws`
+  const wsProtocols = token ? ['auth_' + token] : []
   
   console.log("🔗 Подключение к новому WebSocket шлюзу матчмейкинга:", wsUrl)
-  socket.value = new WebSocket(wsUrl)
+  socket.value = wsProtocols.length ? new WebSocket(wsUrl, wsProtocols) : new WebSocket(wsUrl)
 
   socket.value.onopen = () => {
     triggerNotification('📡 Подключение к игровому серверу установлено!', 'success', 3000)
@@ -435,6 +621,7 @@ const initWebSocket = () => {
               console.error("Ошибка десериализации MatchFoundData:", parseErr)
             }
           }
+          clearShipsPlacement()
           gameState.value = 'placement'
           triggerNotification('⚔️ Соперник найден! Переходим к расстановке флота.', 'success', 4000)
           break
@@ -447,7 +634,6 @@ const initWebSocket = () => {
           break
 
         case 'game_started':
-          // игнорируем, если игра уже активна (было переподключение или запоздалое сообщение)
           if (gameState.value !== 'placement' && gameState.value !== 'searching' && gameState.value !== 'waiting') {
             break
           }
@@ -455,19 +641,32 @@ const initWebSocket = () => {
           if (typeof gsData === 'string') {
             try { gsData = JSON.parse(gsData) } catch(e) { gsData = null }
           }
-          if (gsData && gsData.current_turn) {
-            currentTurnPlayerID.value = gsData.current_turn
-            gameState.value = (gsData.current_turn === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
+          if (gsData) {
+            if (gsData.current_turn) {
+              currentTurnPlayerID.value = gsData.current_turn
+              gameState.value = (gsData.current_turn === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
+            }
+            if (gsData.player1_name && gsData.player2_name) {
+              opponentName.value = (myPlayerID.value === gsData.player1_id)
+                ? gsData.player2_name : gsData.player1_name
+            }
           }
           triggerNotification('⚔️ Игра началась!', 'success', 3000)
           break
 
         case 'your_turn':
-          if (myPlayerID.value) {
-            currentTurnPlayerID.value = myPlayerID.value
-            gameState.value = 'player-turn'
+          {
+            let ytData = response.data
+            if (typeof ytData === 'string') { try { ytData = JSON.parse(ytData) } catch(e) { ytData = null } }
+            const turnOwner = ytData ? (ytData.current_turn || ytData.CurrentTurn) : null
+            if (turnOwner) {
+              currentTurnPlayerID.value = turnOwner
+              gameState.value = (turnOwner === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
+              if (turnOwner === myPlayerID.value) {
+                triggerNotification('💥 Ваш ход!', 'success', 3000)
+              }
+            }
           }
-          triggerNotification('💥 Ваш ход!', 'success', 3000)
           break
 
         case 'opponent_moved':
@@ -507,19 +706,253 @@ const initWebSocket = () => {
           triggerNotification('👥 Соперник расставляет корабли...', 'success', 3000)
           break
 
+        case 'achievement_unlocked':
+          {
+            let ad = response.data
+            if (typeof ad === 'string') { try { ad = JSON.parse(ad) } catch(e) { ad = null } }
+            if (ad && ad.name) {
+              showAchievementToast(ad)
+            }
+          }
+          break
+
         case 'game_over':
           {
             let gd = response.data
             if (typeof gd === 'string') { try { gd = JSON.parse(gd) } catch(e) { gd = null } }
-            const winnerId = gd ? (gd.winner_id || gd.WinnerID) : null
-            if (winnerId === myPlayerID.value) {
+            if (!gd) break
+            const winnerId = gd.winner_id || gd.WinnerID || null
+            const result = gd.result || 'win'
+            const reward1 = gd.reward1 ?? 0
+            const reward2 = gd.reward2 ?? 0
+            const hits1 = gd.hits1 ?? 0
+            const hits2 = gd.hits2 ?? 0
+            const perfect1 = gd.perfect_win1 ?? false
+            const perfect2 = gd.perfect_win2 ?? false
+
+            const newBalance1 = gd.new_balance1 ?? null
+            const newBalance2 = gd.new_balance2 ?? null
+
+            const isP1 = myPlayerID.value === gd.player1_id
+            const myReward = isP1 ? reward1 : reward2
+            const myHits = isP1 ? hits1 : hits2
+            const myPerfect = isP1 ? perfect1 : perfect2
+            const myNewBalance = isP1 ? newBalance1 : newBalance2
+
+            gameReward.value = myReward
+            perfectWin.value = myPerfect
+            playerHits.value = myHits
+            if (myNewBalance !== null) {
+              localStorage.setItem('coins', String(myNewBalance))
+            }
+
+            if (result === 'draw') {
+              gameResult.value = 'draw'
+              triggerNotification('🤝 НИЧЬЯ! Оба флота уничтожены!', 'success', null)
+            } else if (winnerId === myPlayerID.value) {
+              gameResult.value = 'win'
               triggerNotification('🏆 ПОБЕДА! Вражеский флот полностью разгромлен!', 'success', null)
             } else {
+              gameResult.value = 'lose'
               triggerNotification('💥 ПОРАЖЕНИЕ. Ваш флот уничтожен.', 'error', null)
             }
+            clearShipsPlacement()
             gameState.value = 'finished'
-            playAgainTimeout.value = setTimeout(() => goBackToMenu(), 5000)
+            opponentReconnectTimer.value = null
+            isRevanchReady.value = false
+            revanchOpponentReady.value = false
+            startCountdown()
           }
+          break
+
+        case 'timer_tick':
+          {
+            let td = response.data
+            if (typeof td === 'string') { try { td = JSON.parse(td) } catch(e) { td = null } }
+            if (td) {
+              if (td.timer_type === 'placement') {
+                placementSecondsLeft.value = td.seconds_left
+              } else if (td.timer_type === 'turn') {
+                turnSecondsLeft.value = td.seconds_left
+                if (td.current_turn) {
+                  currentTurnPlayerID.value = td.current_turn
+                }
+                currentTurnId.value = td.current_turn || null
+              } else if (td.timer_type === 'gameover') {
+                countdown.value = td.seconds_left
+              }
+            }
+          }
+          break
+
+        case 'placement_auto_filled':
+          {
+            let pd = response.data
+            if (typeof pd === 'string') { try { pd = JSON.parse(pd) } catch(e) { pd = null } }
+            triggerNotification(pd?.message || '⏰ Время вышло! Корабли расставлены случайно.', 'error', 6000)
+            isReady.value = true
+          }
+          break
+
+        case 'turn_timeout':
+          {
+            let td = response.data
+            if (typeof td === 'string') { try { td = JSON.parse(td) } catch(e) { td = null } }
+            triggerNotification(td?.message || '⏰ Время вышло!', 'error', 4000)
+            turnSecondsLeft.value = null
+          }
+          break
+
+        case 'opponent_left':
+          {
+            if (isLeaving.value) break
+            let od = response.data
+            if (typeof od === 'string') { try { od = JSON.parse(od) } catch(e) { od = null } }
+            opponentReconnectTimer.value = 20
+            triggerNotification(od?.message || '👋 Соперник потерял соединение', 'error', null)
+            clearShipsPlacement()
+            placementSecondsLeft.value = null
+            turnSecondsLeft.value = null
+          }
+          break
+
+        case 'opponent_reconnected':
+          {
+            opponentReconnectTimer.value = null
+            triggerNotification('🔄 Соперник переподключился', 'info', 3000)
+          }
+          break
+
+        case 'reconnect_timer':
+          {
+            let td = response.data
+            if (typeof td === 'string') { try { td = JSON.parse(td) } catch(e) { td = null } }
+            if (td && td.seconds_left !== undefined) {
+              opponentReconnectTimer.value = td.seconds_left
+            }
+          }
+          break
+
+        case 'revanch_toggle':
+          {
+            let rd = response.data
+            if (typeof rd === 'string') { try { rd = JSON.parse(rd) } catch(e) { rd = null } }
+            if (rd) {
+              const isP1 = lastGameData.value?.player1_id === myPlayerID.value
+              const opponentReady = isP1 ? rd.player2_ready : rd.player1_ready
+              revanchOpponentReady.value = !!opponentReady
+            }
+          }
+          break
+
+        case 'force_leave_to_lobby':
+          {
+            let fd = response.data
+            if (typeof fd === 'string') { try { fd = JSON.parse(fd) } catch(e) { fd = null } }
+            triggerNotification(fd?.message || '🚪 Возврат в лобби', 'success', 3000)
+            clearShipsPlacement()
+            placementSecondsLeft.value = null
+            turnSecondsLeft.value = null
+            goBackToMenu()
+          }
+          break
+
+        case 'revanch_game_start':
+          {
+            let rsd = response.data
+            if (typeof rsd === 'string') { try { rsd = JSON.parse(rsd) } catch(e) { rsd = null } }
+            if (rsd?.game_id) {
+              if (playAgainTimeout.value) {
+                clearTimeout(playAgainTimeout.value)
+                playAgainTimeout.value = null
+              }
+              if (countdownInterval) { clearInterval(countdownInterval); countdownInterval = null }
+              if (socket.value) {
+                socket.value.onclose = null
+                socket.value.close()
+                socket.value = null
+              }
+              opponentName.value = ''
+              currentTurnPlayerID.value = null
+              currentTurnId.value = null
+              isReady.value = false
+              isSending.value = false
+              notificationMessage.value = ''
+              placementSecondsLeft.value = null
+              turnSecondsLeft.value = null
+              gameReward.value = null
+              gameResult.value = ''
+              perfectWin.value = false
+              playerHits.value = 0
+              lastGameData.value = null
+              myStats.value = null
+              opponentStats.value = null
+              processedMovesCount.value = 0
+              countdown.value = 20
+              isRevanchReady.value = false
+              revanchOpponentReady.value = false
+              for (let r = 0; r < 10; r++) {
+                for (let c = 0; c < 10; c++) {
+                  playerDefenseGrid.value[r][c] = 'none'
+                  enemyAttackGrid.value[r][c] = { status: 'none', animating: false, exploding: false }
+                }
+              }
+              const freshShips = [
+                { id: 1, size: 4, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 2, size: 3, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 3, size: 3, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 4, size: 2, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 5, size: 2, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 6, size: 2, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 7, size: 1, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 8, size: 1, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 9, size: 1, placed: false, row: null, col: null, direction: 'horizontal' },
+                { id: 10, size: 1, placed: false, row: null, col: null, direction: 'horizontal' },
+              ]
+              availableShips.value = freshShips
+              gameState.value = 'searching'
+              localGameId.value = rsd.game_id
+              localStorage.removeItem(SHIPS_STORAGE_KEY)
+              initWebSocket()
+            }
+          }
+          break
+
+        case 'game_state':
+          {
+            let gs = response.data
+            if (typeof gs === 'string') { try { gs = JSON.parse(gs) } catch(e) { gs = null } }
+            if (!gs) break
+            lastGameData.value = gs
+            const rawStatus = gs.Status || gs.status
+            if (gs.player1_name && gs.player2_name) {
+              opponentName.value = (myPlayerID.value === gs.player1_id)
+                ? gs.player2_name : gs.player1_name
+            }
+            if (rawStatus === 'placing_ships') {
+              updatePlayerStats(gs)
+              if (gameState.value === 'searching') {
+                gameState.value = 'placement'
+                clearShipsPlacement()
+                triggerNotification('⚔️ Соперник найден! Переходим к расстановке флота.', 'success', 4000)
+              }
+            } else if (rawStatus === 'playing') {
+              handlePlayingState(gs)
+              clearGrids()
+              applyMoveHistory(gs, gs.Moves || gs.moves || [])
+              applySunkShips(gs)
+              applySunkEnemyShips(gs)
+              updatePlayerStats(gs)
+            } else if (rawStatus === 'finished') {
+              handleGameFinished(gs)
+            }
+          }
+          break
+
+        case 'left_lobby':
+          clearShipsPlacement()
+          placementSecondsLeft.value = null
+          turnSecondsLeft.value = null
           break
 
         case 'error':
@@ -537,14 +970,214 @@ const initWebSocket = () => {
 
   socket.value.onerror = (error) => {
     console.error("WebSocket Error:", error)
-    triggerNotification('❌ Критическая ошибка сетевого канала.', 'error', null)
+    if (!isReconnecting.value) {
+      triggerNotification('❌ Ошибка соединения с сервером.', 'error', null)
+      startReconnect()
+    }
   }
 
   socket.value.onclose = (e) => {
     clearInterval(pingInterval)
-    if (gameState.value !== 'finished') {
-      triggerNotification('🚨 Канал прерван сервером. Попробуйте обновить страницу.', 'error', null)
+    if (gameState.value !== 'finished' && !isLeaving.value && !props.isLobbyWait) {
+      if (!isReconnecting.value) {
+        triggerNotification('🚨 Соединение с сервером разорвано.', 'error', null)
+        startReconnect()
+      }
     }
+  }
+}
+
+const stopReconnecting = () => {
+  isReconnecting.value = false
+  reconnectAttempt.value = 0
+}
+
+const startReconnect = () => {
+  if (isReconnecting.value || isLeaving.value || gameState.value === 'finished') return
+  isReconnecting.value = true
+  reconnectAttempt.value = 0
+  doReconnect()
+}
+
+const doReconnect = () => {
+  if (isLeaving.value || gameState.value === 'finished') {
+    stopReconnecting()
+    return
+  }
+  if (reconnectAttempt.value >= 20) {
+    isReconnecting.value = false
+    triggerNotification('❌ Не удалось переподключиться к серверу. Обновите страницу.', 'error', null)
+    return
+  }
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempt.value), 20000)
+  triggerNotification(`⚠️ Потеря соединения. Попытка переподключения (${reconnectAttempt.value + 1})...`, 'error', delay + 2000)
+  reconnectAttempt.value++
+  setTimeout(async () => {
+    if (isLeaving.value || gameState.value === 'finished') {
+      stopReconnecting()
+      return
+    }
+    try {
+      await apiClient.refreshWsToken()
+      initWebSocket()
+    } catch (err) {
+      doReconnect()
+    }
+  }, delay)
+}
+
+const clearGrids = () => {
+  for (let r = 0; r < 10; r++) {
+    for (let c = 0; c < 10; c++) {
+      if (playerDefenseGrid.value[r][c] !== 'destroyed') {
+        playerDefenseGrid.value[r][c] = 'none'
+      }
+      if (enemyAttackGrid.value[r][c].status !== 'destroyed') {
+        enemyAttackGrid.value[r][c].status = 'none'
+      }
+    }
+  }
+}
+
+const markSunkShip = (shipCells, grid, isObjectGrid) => {
+  shipCells.forEach(cell => {
+    const x = cell.x !== undefined ? cell.x : cell.X
+    const y = cell.y !== undefined ? cell.y : cell.Y
+    if (y >= 0 && y < 10 && x >= 0 && x < 10) {
+      if (isObjectGrid) {
+        grid[y][x].status = 'destroyed'
+      } else {
+        grid[y][x] = 'destroyed'
+      }
+    }
+  })
+}
+
+const markSurroundingMisses = (shipCells, grid) => {
+  for (const cell of shipCells) {
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const nr = cell.y + dr
+        const nc = cell.x + dc
+        if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10) {
+          const val = grid[nr][nc]
+          if (val === 'none' || val?.status === 'none') {
+            if (typeof val === 'object') {
+              grid[nr][nc].status = 'miss'
+            } else {
+              grid[nr][nc] = 'miss'
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+const applyMoveHistory = (game, incomingMoves) => {
+  const movesList = game.Moves || game.moves
+  if (!movesList || !Array.isArray(movesList)) return
+
+  movesList.forEach(move => {
+    const pId = move.player_id || move.PlayerID
+    const mX = move.x !== undefined ? move.x : move.X
+    const mY = move.y !== undefined ? move.y : move.Y
+    const mHit = move.hit !== undefined ? move.hit : move.Hit
+    const isMyMove = pId === myPlayerID.value
+    const cellStatus = mHit ? 'hit' : 'miss'
+    if (isMyMove) {
+      enemyAttackGrid.value[mY][mX].status = cellStatus
+    } else {
+      playerDefenseGrid.value[mY][mX] = cellStatus
+    }
+  })
+  processedMovesCount.value = incomingMoves.length
+}
+
+const applySunkShips = (game) => {
+  const shipsList = game.Ships || game.ships
+  if (!shipsList || !Array.isArray(shipsList)) return
+
+  shipsList.forEach(ship => {
+    const shipCells = ship.cells || ship.Cells || []
+    const shipPlayerId = ship.player_id || ship.PlayerID
+    const isSunk = ship.sunk || ship.Sunk
+    if (!isSunk) return
+
+    if (shipPlayerId === myPlayerID.value) {
+      markSunkShip(shipCells, playerDefenseGrid.value, false)
+      markSurroundingMisses(shipCells, playerDefenseGrid.value)
+    } else {
+      markSunkShip(shipCells, enemyAttackGrid.value, true)
+      markSurroundingMisses(shipCells, enemyAttackGrid.value)
+    }
+  })
+}
+
+const applySunkEnemyShips = (game) => {
+  const sunkEnemyList = game.sunk_enemy_ships || game.SunkEnemyShips
+  if (!sunkEnemyList || !Array.isArray(sunkEnemyList)) return
+
+  sunkEnemyList.forEach(ship => {
+    const shipCells = ship.cells || ship.Cells || []
+    shipCells.forEach(cell => {
+      const x = cell.x !== undefined ? cell.x : cell.X
+      const y = cell.y !== undefined ? cell.y : cell.Y
+      if (y >= 0 && y < 10 && x >= 0 && x < 10) {
+        enemyAttackGrid.value[y][x].status = 'destroyed'
+      }
+    })
+    for (const cell of shipCells) {
+      const cx = cell.x !== undefined ? cell.x : cell.X
+      const cy = cell.y !== undefined ? cell.y : cell.Y
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          const nr = cy + dr
+          const nc = cx + dc
+          if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10) {
+            if (enemyAttackGrid.value[nr][nc].status === 'none') {
+              enemyAttackGrid.value[nr][nc].status = 'miss'
+            }
+          }
+        }
+      }
+    }
+  })
+}
+
+const updatePlayerStats = (game) => {
+  const p1Stats = game.player1_stats
+  const p2Stats = game.player2_stats
+  if (!p1Stats || !p2Stats) return
+
+  const isP1 = myPlayerID.value === (game.player1_id || game.Player1ID)
+  myStats.value = isP1 ? p1Stats : p2Stats
+  opponentStats.value = isP1 ? p2Stats : p1Stats
+}
+
+const handleGameFinished = (game) => {
+  gameState.value = 'finished'
+  const winnerId = game.WinnerID || game.winner_id
+  if (!winnerId || winnerId === '00000000-0000-0000-0000-000000000000') {
+    triggerNotification('🤝 НИЧЬЯ! Оба флота уничтожены!', 'success', null)
+  } else if (winnerId === myPlayerID.value) {
+    triggerNotification('🏆 ПОБЕДА! Вражеский флот полностью разгромлен!', 'success', null)
+  } else {
+    triggerNotification('💥 ПОРАЖЕНИЕ. Ваш флот уничтожен.', 'error', null)
+  }
+  clearShipsPlacement()
+  clearGrids()
+  startCountdown()
+}
+
+const handlePlayingState = (game) => {
+  const turnId = game.CurrentTurn || game.current_turn
+  currentTurnPlayerID.value = turnId
+  gameState.value = (turnId === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
+  const p1name = game.player1_name || game.Player1Name
+  const p2name = game.player2_name || game.Player2Name
+  if (p1name && p2name) {
+    opponentName.value = (myPlayerID.value === (game.player1_id || game.Player1ID)) ? p2name : p1name
   }
 }
 
@@ -565,16 +1198,9 @@ const processServerGameState = (game) => {
     }
     return
   }
-  
+
   if (rawStatus === 'finished') {
-    gameState.value = 'finished'
-    const winnerId = game.WinnerID || game.winner_id
-    if (winnerId === myPlayerID.value) {
-      triggerNotification('🏆 ПОБЕДА! Вражеский флот полностью разгромлен!', 'success', null)
-    } else {
-      triggerNotification('💥 ПОРАЖЕНИЕ. Ваш флот уничтожен.', 'error', null)
-    }
-    playAgainTimeout.value = setTimeout(() => goBackToMenu(), 5000)
+    handleGameFinished(game)
     return
   }
 
@@ -584,112 +1210,21 @@ const processServerGameState = (game) => {
   }
 
   if (rawStatus === 'playing') {
-    const turnId = game.CurrentTurn || game.current_turn
-    currentTurnPlayerID.value = turnId
-    gameState.value = (turnId === myPlayerID.value) ? 'player-turn' : 'enemy-turn'
-    const p1name = game.player1_name || game.Player1Name
-    const p2name = game.player2_name || game.Player2Name
-    if (p1name && p2name) {
-      opponentName.value = (myPlayerID.value === (game.player1_id || game.Player1ID)) ? p2name : p1name
-    }
+    handlePlayingState(game)
   }
 
-  // Очистка сеток перед рендером
-  for (let r = 0; r < 10; r++) {
-    for (let c = 0; c < 10; c++) {
-      playerDefenseGrid.value[r][c] = 'none'
-      enemyAttackGrid.value[r][c].status = 'none'
-    }
-  }
-
-  // Маппинг истории ходов из структуры бэкенда []Move
-  const movesList = game.Moves || game.moves
-  if (movesList && Array.isArray(movesList)) {
-    movesList.forEach(move => {
-      const pId = move.player_id || move.PlayerID
-      const mX = move.x !== undefined ? move.x : move.X
-      const mY = move.y !== undefined ? move.y : move.Y
-      const mHit = move.hit !== undefined ? move.hit : move.Hit
-
-      const isMyMove = pId === myPlayerID.value
-      const cellStatus = mHit ? 'hit' : 'miss'
-
-      if (isMyMove) {
-        enemyAttackGrid.value[mY][mX].status = cellStatus
-      } else {
-        playerDefenseGrid.value[mY][mX] = cellStatus
-      }
-    })
-    processedMovesCount.value = incomingMoves.length
-  }
-
-  // Отмечаем сбитые корабли на обеих сетках
-  const shipsList = game.Ships || game.ships
-  if (shipsList && Array.isArray(shipsList)) {
-    const markSurroundingMisses = (shipCells, grid) => {
-      for (const cell of shipCells) {
-        for (let dr = -1; dr <= 1; dr++) {
-          for (let dc = -1; dc <= 1; dc++) {
-            const nr = cell.y + dr
-            const nc = cell.x + dc
-            if (nr >= 0 && nr < 10 && nc >= 0 && nc < 10) {
-              if (grid[nr][nc] === 'none' || grid[nr][nc]?.status === 'none') {
-                if (typeof grid[nr]?.[nc] === 'object') {
-                  grid[nr][nc].status = 'miss'
-                } else {
-                  grid[nr][nc] = 'miss'
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    shipsList.forEach(ship => {
-      const shipCells = ship.cells || ship.Cells || []
-      const shipPlayerId = ship.player_id || ship.PlayerID
-      const isSunk = ship.sunk || ship.Sunk
-
-      if (!isSunk) return
-
-      if (shipPlayerId === myPlayerID.value) {
-        shipCells.forEach(cell => {
-          const x = cell.x !== undefined ? cell.x : cell.X
-          const y = cell.y !== undefined ? cell.y : cell.Y
-          if (y >= 0 && y < 10 && x >= 0 && x < 10) {
-            playerDefenseGrid.value[y][x] = 'destroyed'
-          }
-        })
-        markSurroundingMisses(shipCells, playerDefenseGrid.value)
-      } else {
-        shipCells.forEach(cell => {
-          const x = cell.x !== undefined ? cell.x : cell.X
-          const y = cell.y !== undefined ? cell.y : cell.Y
-          if (y >= 0 && y < 10 && x >= 0 && x < 10) {
-            enemyAttackGrid.value[y][x].status = 'destroyed'
-          }
-        })
-        markSurroundingMisses(shipCells, enemyAttackGrid.value)
-      }
-    })
-  }
-
-  // Извлекаем статистику игроков из состояния игры
-  const p1Stats = game.player1_stats
-  const p2Stats = game.player2_stats
-  if (p1Stats && p2Stats) {
-    const isP1 = myPlayerID.value === (game.player1_id || game.Player1ID)
-    myStats.value = isP1 ? p1Stats : p2Stats
-    opponentStats.value = isP1 ? p2Stats : p1Stats
-  }
+  clearGrids()
+  applyMoveHistory(game, incomingMoves)
+  applySunkShips(game)
+  applySunkEnemyShips(game)
+  updatePlayerStats(game)
 }
 
 /**
  * ОТПРАВКА КОРАБЛЕЙ ИСПОЛЬЗУЕТ СИНХРОНИЗИРОВАННЫЙ КЛИЕНТ И ТОКЕНЫ
  */
-const sendShipsToServer = async () => {
-  const shipsArray = availableShips.value.map(ship => {
+const getShipsArray = () => {
+  return availableShips.value.map(ship => {
     const xCoord = typeof ship.col === 'number' ? ship.col : 0
     const yCoord = typeof ship.row === 'number' ? ship.row : 0
     return {
@@ -699,33 +1234,35 @@ const sendShipsToServer = async () => {
       horizontal: ship.direction === 'horizontal'
     }
   })
+}
 
-  gameState.value = 'waiting'
-  triggerNotification('🚀 Отправка диспозиции сил в штаб...', 'success', 3000)
-
-  try {
-    const token = localStorage.getItem('token')
-    await fetch(`/api/games/${localGameId.value}/ships/reset`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-
-    await apiClient.placeShips(localGameId.value, shipsArray)
-
-    const confirmResponse = await fetch(`/api/games/${localGameId.value}/ships/confirm`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-
-    if (!confirmResponse.ok) {
-      throw new Error("Не удалось подтвердить готовность")
+const toggleReady = async () => {
+  if (isSending.value) return
+  if (isReady.value) {
+    try {
+      await apiClient.shipsReset(localGameId.value)
+      isReady.value = false
+      saveShipsPlacement()
+      triggerNotification('🔄 Готовность отменена', 'success', 3000)
+    } catch (err) {
+      triggerNotification(`❌ Ошибка: ${err.message}`, 'error', 3000)
     }
+    return
+  }
+  if (!allShipsPlaced.value) return
 
-    triggerNotification('⚓ Флот зафиксирован. Ожидаем готовности оппонента...', 'success', 15000)
+  isSending.value = true
+  try {
+    await apiClient.shipsReset(localGameId.value)
+    await apiClient.placeShips(localGameId.value, getShipsArray())
+    await apiClient.shipsConfirm(localGameId.value)
+    saveShipsPlacement()
+    isReady.value = true
+    triggerNotification('⚓ Флот зафиксирован. Ожидаем оппонента...', 'success', 15000)
   } catch (err) {
-    console.error(err)
-    gameState.value = 'placement'
-    triggerNotification(`❌ Отклонено штабом: ${err.message}`, 'error', 6000)
+    triggerNotification(`❌ Ошибка: ${err.message}`, 'error', 6000)
+  } finally {
+    isSending.value = false
   }
 }
 
@@ -735,27 +1272,11 @@ const sendShipsToServer = async () => {
 const handleEnemyCellShot = async (row, col) => {
   if (!canUserShoot.value) return
   if (enemyAttackGrid.value[row][col].status !== 'none' || enemyAttackGrid.value[row][col].animating) return
-  
+
   enemyAttackGrid.value[row][col].animating = true
-  const token = localStorage.getItem('token')
-  const url = `/api/games/${localGameId.value}/move`
 
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({ x: col, y: row })
-    })
-
-    if (!response.ok) {
-      const errBody = await response.json().catch(() => ({}))
-      throw new Error(errBody.error || errBody.message || 'Ошибка сервера')
-    }
-
-    const gameStateResponse = await response.json()
+    const gameStateResponse = await apiClient.makeMove(localGameId.value, col, row)
     processServerGameState(gameStateResponse)
     const moves = gameStateResponse.Moves || gameStateResponse.moves || []
     const lastMove = moves.length > 0 ? moves[moves.length - 1] : null
@@ -824,6 +1345,7 @@ const handlePlacedShipClick = (ship) => {
   const nextDir = ship.direction === 'horizontal' ? 'vertical' : 'horizontal'
   if (!validateShipPlacement(ship.row, ship.col, ship.size, nextDir, ship.id)) {
     ship.direction = nextDir
+    saveShipsPlacement()
   } else {
     triggerNotification('❌ Невозможно повернуть: нет места для маневра.', 'error', 2000)
   }
@@ -832,6 +1354,7 @@ const handlePlacedShipClick = (ship) => {
 const toggleDockShipDirection = (ship) => {
   if (gameState.value !== 'placement') return
   ship.direction = ship.direction === 'horizontal' ? 'vertical' : 'horizontal'
+  saveShipsPlacement()
 }
 
 const randomizeFleet = () => {
@@ -879,6 +1402,29 @@ const randomizeFleet = () => {
       triggerNotification(`❌ Не удалось разместить корабль ${ship.size}-го размера`, 'error', 3000)
     }
   }
+  saveShipsPlacement()
+}
+
+const leaveLobby = async () => {
+  isLeaving.value = true
+  stopReconnecting()
+  emit('back-to-menu')
+  try {
+    await apiClient.leaveMatchmaking()
+  } catch (e) {
+    console.warn('Failed to leave matchmaking queue:', e)
+  }
+  if (props.lobbyId) {
+    try {
+      await apiClient.leaveLobby(props.lobbyId)
+    } catch (e) {
+      console.warn('Failed to leave lobby via REST:', e)
+    }
+  }
+  if (socket.value && socket.value.readyState === WebSocket.OPEN) {
+    socket.value.send(JSON.stringify({ type: 'leave_lobby' }))
+  }
+  clearShipsPlacement()
 }
 
 const forfeitGame = async () => {
@@ -896,23 +1442,51 @@ const removeShipFromBoard = (ship) => {
     ship.placed = false
     ship.row = null
     ship.col = null 
+    saveShipsPlacement()
   } 
 }
 
 const getDockShipBoxStyle = (ship) => {
-  if (ship.direction === 'vertical') {
-    return { width: `32px`, height: `${ship.size * 32}px` }
-  }
-  return { width: `${ship.size * 32}px`, height: `32px` }
+  const cellPx = 58
+  const w = ship.direction === 'horizontal' ? ship.size * cellPx : cellPx
+  const h = ship.direction === 'vertical' ? ship.size * cellPx : cellPx
+  return { width: `${w}px`, height: `${h}px`, flexShrink: '0' }
+}
+
+const getShipCellSize = () => {
+  const gridEl = document.querySelector('.defense-grid .grid-cols-11')
+  if (!gridEl) return { cellW: 0, cellH: 0, offsetX: 0, offsetY: 0 }
+  const parent = gridEl.parentElement
+  const parentRect = parent.getBoundingClientRect()
+  const gridRect = gridEl.getBoundingClientRect()
+  const cellW = gridRect.width / 11
+  const cellH = gridRect.height / 11
+  const offsetX = gridRect.left - parentRect.left
+  const offsetY = gridRect.top - parentRect.top
+  return { cellW, cellH, offsetX, offsetY }
 }
 
 const getPlacedShipStyle = (ship) => {
-  const u = 100 / 11
+  const { cellW, cellH, offsetX, offsetY } = getShipCellSize()
+  if (!cellW) return {}
   return {
-    left: ((ship.col + 1) * u) + '%', 
-    top: ((ship.row + 1) * u) + '%',
-    width: (ship.direction === 'horizontal' ? ship.size * u : u) + '%',
-    height: (ship.direction === 'vertical' ? ship.size * u : u) + '%',
+    left: `${offsetX + (ship.col + 1) * cellW}px`,
+    top: `${offsetY + (ship.row + 1) * cellH}px`,
+    width: ship.direction === 'horizontal' ? `${ship.size * cellW}px` : `${cellW}px`,
+    height: ship.direction === 'vertical' ? `${ship.size * cellH}px` : `${cellH}px`,
+  }
+}
+
+const getGameShipStyle = (ship) => {
+  const { cellW, cellH, offsetX, offsetY } = getShipCellSize()
+  if (!cellW) return {}
+  const sunkOpacity = ship.sunk ? 0.4 : 0.8
+  return {
+    left: `${offsetX + (ship.col + 1) * cellW}px`,
+    top: `${offsetY + (ship.row + 1) * cellH}px`,
+    width: ship.direction === 'horizontal' ? `${ship.size * cellW}px` : `${cellW}px`,
+    height: ship.direction === 'vertical' ? `${ship.size * cellH}px` : `${cellH}px`,
+    opacity: sunkOpacity,
   }
 }
 
@@ -927,8 +1501,21 @@ const handleDragStart = (e, ship, source) => {
     originalRow.value = ship.row
     originalCol.value = ship.col
   }
-  
-  e.dataTransfer.effectAllowed = 'move' 
+
+  e.dataTransfer.effectAllowed = 'move'
+
+  const ghost = e.target.cloneNode(true)
+  ghost.style.position = 'absolute'
+  ghost.style.top = '-1000px'
+  ghost.style.left = '-1000px'
+  ghost.style.opacity = '0.6'
+  ghost.style.pointerEvents = 'none'
+  document.body.appendChild(ghost)
+  const ghostRect = ghost.getBoundingClientRect()
+  const offsetX = e.clientX - (source === 'dock' ? ghostRect.left : ghostRect.left)
+  const offsetY = e.clientY - (source === 'dock' ? ghostRect.top : ghostRect.top)
+  e.dataTransfer.setDragImage(ghost, offsetX, offsetY)
+  setTimeout(() => document.body.removeChild(ghost), 0)
 }
 
 const handleDragOver = (row, col) => {
@@ -957,11 +1544,12 @@ const handleDrop = (row, col) => {
 
   if (!isHoverInvalid.value) {
     const s = availableShips.value.find(x => x.id === draggedShip.value.id)
-    if (s) { 
+    if (s) {
       s.row = row
       s.col = col
-      s.placed = true 
+      s.placed = true
     }
+    saveShipsPlacement()
   } else {
     if (dragSource.value === 'board') {
       triggerNotification('❌ Нельзя поставить сюда: позиция заблокирована или нарушает границы флота', 'error', 3000)
@@ -969,7 +1557,7 @@ const handleDrop = (row, col) => {
       triggerNotification('❌ Неверная позиция для установки', 'error', 2000)
     }
   }
-  
+
   draggedShip.value = null
   activeHoverCells.value = []
   originalRow.value = null
@@ -983,20 +1571,44 @@ const handleDragEnd = () => {
   activeHoverCells.value = []
 }
 
-const getRandomTop = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min
-const resetFish1 = async () => { isFish1Active.value = false; fish1Top.value = getRandomTop(10, 42); await nextTick(); isFish1Active.value = true }
-const resetFish2 = async () => { isFish2Active.value = false; fish2Top.value = getRandomTop(55, 88); await nextTick(); isFish2Active.value = true }
+let lobbyPollInterval = null
 
-onMounted(() => {
+onMounted(async () => {
   parseMyIDFromToken()
+  loadShipsPlacement()
+
   initWebSocket()
+  document.addEventListener('keydown', handleGlobalKeydown)
+  try {
+    const profile = await apiClient.getProfile()
+    activeFishIds.value = profile.active_fish || []
+  } catch (_) {}  
+
+  // Poll for active games while searching (fallback if WS match_found is lost)
+  lobbyPollInterval = setInterval(async () => {
+    if (!props.isLobbyWait && gameState.value === 'searching') {
+      try {
+        const matchStatus = await apiClient.getMatchmakingStatus()
+        if (matchStatus && matchStatus.status !== 'searching') {
+        }
+      } catch (_) {}
+    }
+  }, 5000)
 })
 
 onUnmounted(() => {
+  stopReconnecting()
+  document.removeEventListener('keydown', handleGlobalKeydown)
   if (playAgainTimeout.value) {
     clearTimeout(playAgainTimeout.value)
   }
   clearInterval(pingInterval)
+  if (lobbyPollInterval) {
+    clearInterval(lobbyPollInterval)
+    lobbyPollInterval = null
+  }
+  placementSecondsLeft.value = null
+  turnSecondsLeft.value = null
   if (socket.value) {
     socket.value.close()
   }
@@ -1009,17 +1621,20 @@ onUnmounted(() => {
 .animate-scale-pop { animation: scalePop 0.25s ease-out forwards; }
 @keyframes scalePop { from { transform: scale(0.94); opacity: 0.5; } to { transform: scale(1); opacity: 1; } }
 
-.fish { position: fixed; z-index: 99; pointer-events: none; will-change: transform; }
-.fish-1-container { right: -160px; animation: swim-right-left 14s linear forwards; }
-.fish-2-container { left: -160px; animation: swim-left-right 12s linear forwards; }
-.fish-wiggle { display: block; animation: fish-live-motion 2.5s ease-in-out infinite alternate; }
-
-@keyframes swim-right-left { 0% { transform: translateX(0); } 100% { transform: translateX(calc(-100vw - 320px)); } }
-@keyframes swim-left-right { 0% { transform: translateX(0); } 100% { transform: translateX(calc(100vw + 320px)); } }
-@keyframes fish-live-motion { 0% { transform: translateY(-6px) rotate(-5deg); } 100% { transform: translateY(10px) rotate(5deg); } }
-
 .shot-laser-target { background: radial-gradient(circle, rgba(239,68,68,0.8) 0%, rgba(0,0,0,0) 70%); border: 2px solid #ef4444; animation: laserScan 0.4s linear infinite alternate; }
 @keyframes laserScan { from { transform: scale(1.1); opacity: 0.5; } to { transform: scale(0.9); opacity: 1; } }
 .explosion-flash { background-color: #ffffff; animation: flashExplode 0.25s ease-out forwards; }
 @keyframes flashExplode { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+.text-win  { color: #15803d; }
+.text-loss { color: #b91c1c; }
+.text-neutral { color: #6b7280; }
+.reward-positive { color: #16a34a; }
+.reward-negative { color: #dc2626; }
+
+.btn--dimmed {
+  opacity: 0.6;
+  background-color: #a0a0a0 !important;
+  transition: opacity 0.2s, background-color 0.2s;
+}
 </style>

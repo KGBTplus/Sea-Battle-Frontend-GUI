@@ -34,15 +34,23 @@
     </div>
 
     <div v-else-if="isAuthorized && !isGameStarted" class="relative z-10 w-full max-w-xl p-4 animate-fade-in">
-      <Lobby 
-        v-if="!showLeaderboard && !showProfile"
+      <Lobby
+        v-if="!showLeaderboard && !showProfile && !showShop && !showInventory && !showMatchHistory && !showAchievements"
         :username="currentUsername" 
         @game-ready="startGameSession" 
         @logout="logout"
         @show-leaderboard="showLeaderboard = true"
         @show-profile="showProfile = true"
+        @show-shop="showShop = true"
+        @show-inventory="showInventory = true"
+        @show-match-history="showMatchHistory = true"
+        @show-achievements="showAchievements = true"
       />
+      <Shop v-else-if="showShop" @close="showShop = false" @profile-updated="handleProfileUpdate" />
+      <Inventory v-else-if="showInventory" @close="showInventory = false" @profile-updated="handleProfileUpdate" />
       <Leaderboard v-else-if="showLeaderboard" @close="showLeaderboard = false" />
+      <MatchHistory v-else-if="showMatchHistory" @close="showMatchHistory = false" />
+      <Achievements v-else-if="showAchievements" @close="showAchievements = false" @balance-updated="handleAchievementBalanceUpdate" />
       <Profile v-else @close="showProfile = false" @username-changed="(name) => currentUsername = name" />
     </div>
 
@@ -50,31 +58,51 @@
       v-else 
       :gameId="activeGameId"
       :isLobbyWait="isLobbyWait"
-      @back-to-menu="isGameStarted = false"
+      :lobbyId="currentLobbyId"
+      @back-to-menu="apiClient.leaveMatchmaking().catch(() => {}); isGameStarted = false; isLobbyWait = false; currentLobbyId = ''; clearGameState()"
     />
 
+    <AchievementToast :achievement="achievementToast" @close="achievementToast = null" />
+    <AudioPlayer />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, provide, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import AuthForm from './components/AuthForm.vue'
 import Lobby from './components/Lobby.vue' 
 import GameBoard from './components/GameBoard.vue' 
 import Leaderboard from './components/Leaderboard.vue'
 import Profile from './components/Profile.vue'
+import Shop from './components/Shop.vue'
+import Inventory from './components/Inventory.vue'
+import MatchHistory from './components/MatchHistory.vue'
+import Achievements from './components/Achievements.vue'
+import AchievementToast from './components/AchievementToast.vue'
+import AudioPlayer from './components/AudioPlayer.vue'
 import { apiClient } from './api/client' // Импортируем исправленный клиент
 import Hls from 'hls.js'
 
 // Инициализируем пустой строкой, так как GameBoard ожидает String
 const activeGameId = ref('') 
 const isStartScreen = ref(true)
-const isAuthorized = ref(!!localStorage.getItem('token')) // ИСПРАВЛЕНО: Проверка по ключу 'token'
+const isAuthorized = ref(false)
 const isGameStarted = ref(false)
 const isLobbyWait = ref(false)
+const currentLobbyId = ref('')
 const showLeaderboard = ref(false)
 const showProfile = ref(false)
-const currentUsername = ref(localStorage.getItem('username') || 'CyberCommander')
+const showShop = ref(false)
+const showInventory = ref(false)
+const showMatchHistory = ref(false)
+const showAchievements = ref(false)
+const currentUsername = ref('CyberCommander')
+
+const achievementToast = ref(null)
+const showAchievementToast = (ach) => {
+  achievementToast.value = ach
+}
+provide('showAchievementToast', showAchievementToast)
 
 const videoRef = ref(null)
 let hlsInstance = null
@@ -90,31 +118,103 @@ const handleLoginSuccess = () => {
   isAuthorized.value = true
 }
 
-const logout = () => {
-  localStorage.removeItem('token') // ИСПРАВЛЕНО: Удаляем 'token' вместо 'auth_token'
+const handleProfileUpdate = (data) => {
+  // Profile was updated (shop/inventory changed); nothing to sync at app level
+}
+
+const handleAchievementBalanceUpdate = (newBalance) => {
+  // Balance updated after claiming achievement reward
+}
+
+const saveGameState = () => {
+  try {
+    localStorage.setItem('activeGameId', activeGameId.value)
+    localStorage.setItem('isGameStarted', isGameStarted.value ? '1' : '')
+    localStorage.setItem('isLobbyWait', isLobbyWait.value ? '1' : '')
+    localStorage.setItem('currentLobbyId', currentLobbyId.value)
+    localStorage.setItem('showShop', showShop.value ? '1' : '')
+    localStorage.setItem('showProfile', showProfile.value ? '1' : '')
+    localStorage.setItem('showLeaderboard', showLeaderboard.value ? '1' : '')
+    localStorage.setItem('showInventory', showInventory.value ? '1' : '')
+    localStorage.setItem('showAchievements', showAchievements.value ? '1' : '')
+  } catch {}
+}
+
+const restoreGameState = () => {
+  try {
+    const saved = localStorage.getItem('activeGameId')
+    if (saved) {
+      activeGameId.value = saved
+      isGameStarted.value = localStorage.getItem('isGameStarted') === '1'
+      isLobbyWait.value = localStorage.getItem('isLobbyWait') === '1'
+      currentLobbyId.value = localStorage.getItem('currentLobbyId') || ''
+      showShop.value = localStorage.getItem('showShop') === '1'
+      showProfile.value = localStorage.getItem('showProfile') === '1'
+      showLeaderboard.value = localStorage.getItem('showLeaderboard') === '1'
+      showInventory.value = localStorage.getItem('showInventory') === '1'
+      showAchievements.value = localStorage.getItem('showAchievements') === '1'
+    }
+  } catch {}
+}
+
+const clearGameState = () => {
+  try {
+    localStorage.removeItem('activeGameId')
+    localStorage.removeItem('isGameStarted')
+    localStorage.removeItem('isLobbyWait')
+    localStorage.removeItem('currentLobbyId')
+    localStorage.removeItem('showShop')
+    localStorage.removeItem('showProfile')
+    localStorage.removeItem('showLeaderboard')
+    localStorage.removeItem('showInventory')
+    localStorage.removeItem('showAchievements')
+  } catch {}
+}
+
+const logout = async () => {
+  try {
+    await apiClient.logout()
+  } catch {}
   localStorage.removeItem('username')
+  localStorage.removeItem('user_id')
   isAuthorized.value = false
   isGameStarted.value = false
+  isLobbyWait.value = false
+  currentLobbyId.value = ''
   showLeaderboard.value = false
   showProfile.value = false
+  showShop.value = false
+  showInventory.value = false
+  showAchievements.value = false
   isStartScreen.value = true
+  clearGameState()
 }
 
 // Вызывается из Лобби при клике на кнопку «НАЧАТЬ ПОИСК СОПЕРНИКА»
 const startGameSession = async (gameId) => {
   try {
     if (gameId && gameId !== 'LOBBY_WAIT') {
+      // Check if it's a lobby wait with ID (LOBBY_<uuid>)
+      if (typeof gameId === 'string' && gameId.startsWith('LOBBY_')) {
+        currentLobbyId.value = gameId.replace('LOBBY_', '')
+        activeGameId.value = ''
+        isLobbyWait.value = true
+        isGameStarted.value = true
+        saveGameState()
+        return
+      }
       activeGameId.value = gameId
+      currentLobbyId.value = ''
       isLobbyWait.value = false
       isGameStarted.value = true
+      saveGameState()
       return
     }
-    activeGameId.value = ''
-    isLobbyWait.value = gameId === 'LOBBY_WAIT'
-    if (!isLobbyWait.value) {
-      await apiClient.startMatchmaking()
-    }
-    isGameStarted.value = true
+	activeGameId.value = ''
+	currentLobbyId.value = ''
+	isLobbyWait.value = gameId === 'LOBBY_WAIT'
+	isGameStarted.value = true
+	saveGameState()
   } catch (err) {
     console.error(err)
     alert(`Ошибка старта поиска матча: ${err.message || 'Не удалось связаться с сервером'}`)
@@ -124,6 +224,21 @@ const startGameSession = async (gameId) => {
 // Инициализация фонового видеопотока HLS
 onMounted(async () => {
   await nextTick()
+
+  // Проверяем авторизацию через сервер
+  try {
+    const authData = await apiClient.checkAuth()
+    if (authData && authData.user_id) {
+      localStorage.setItem('user_id', authData.user_id)
+      if (authData.username) {
+        localStorage.setItem('username', authData.username)
+      }
+      isAuthorized.value = true
+    }
+  } catch {}
+
+  restoreGameState()
+
   const video = videoRef.value
   if (!video) return
 
@@ -139,13 +254,6 @@ onMounted(async () => {
       manifestLoadingRetryDelay: 2000,
       levelLoadingMaxRetry: 3,
       levelLoadingRetryDelay: 2000,
-      
-      xhrSetup: function (xhr, url) {
-        const token = localStorage.getItem('token') // ИСПРАВЛЕНО: Читаем 'token' вместо 'auth_token'
-        if (token) {
-          xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-        }
-      }
     })
 
     hlsInstance.loadSource(streamUrl)

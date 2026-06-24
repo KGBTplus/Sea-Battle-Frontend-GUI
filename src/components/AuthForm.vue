@@ -5,7 +5,6 @@
       <div class="bg-gradient-to-r from-[#000080] to-[#033da9] text-white px-2 py-1 flex justify-between items-center font-bold text-xs m-0 mb-4">
         <div class="flex items-center gap-1">
           <span>{{ isLoginMode ? 'Войти' : 'Регистрация' }}</span>
-          <span v-if="DEBUG_MODE" class="ml-2 bg-red-600 text-[9px] px-1 animate-pulse text-white border border-white">DEBUG MODE BILS</span>
         </div>
         <button 
           @click.stop="resetToInitial"
@@ -16,7 +15,7 @@
         </button>
       </div>
 
-      <div class="p-3">
+      <div class="p-3" @keydown.enter.prevent="handleStepEnter">
         <div v-if="step !== 'otp'" class="flex gap-[2px] mb-4 border-b-2 border-[#808080] pb-[2px]">
           <button 
             @click="isLoginMode = true; statusMessage = ''; step = 'credentials'"
@@ -95,8 +94,8 @@
           </template>
 
           <template v-else-if="step === 'forgot-password'">
-            <div class="text-xs font-bold mb-1 text-gray-700" v-if="forgotEmailMask">
-              Код отправлен на {{ forgotEmailMask }}
+            <div class="text-xs font-bold mb-1 text-gray-700">
+              Код отправлен на вашу почту (если пользователь существует и email подтверждён)
             </div>
             <input
               v-model="forgotCode"
@@ -108,7 +107,7 @@
               <input
                 v-model="forgotNewPassword"
                 :type="showForgotNew ? 'text' : 'password'"
-                placeholder="Новый пароль (8-20 символов)"
+                placeholder="Новый пароль (от 8 символов)"
                 class="w-full p-2 bg-white text-black outline-none text-xs border-2 border-t-[#808080] border-l-[#808080] border-b-white border-r-white pr-8"
               />
               <button
@@ -207,10 +206,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { apiClient } from '../api/client'
-
-const DEBUG_MODE = ref(false)
 
 const username = ref('')
 const email = ref('')
@@ -247,8 +244,14 @@ const resetToInitial = () => {
   emit('close')
 }
 
-const loginSuccess = (usernameVal) => {
+const loginSuccess = (usernameVal, userIdVal) => {
+  localStorage.removeItem('reg_in_progress')
+  localStorage.removeItem('reg_username')
   localStorage.setItem('username', usernameVal)
+  if (userIdVal) {
+    localStorage.setItem('user_id', userIdVal)
+  }
+  apiClient.refreshWsToken()
   statusType.value = 'success'
   statusMessage.value = '🚀 Доступ разрешён!'
   setTimeout(() => {
@@ -257,21 +260,17 @@ const loginSuccess = (usernameVal) => {
   }, 800)
 }
 
+const handleStepEnter = () => {
+  if (isSubmitting.value) return
+  if (step.value === 'credentials') handleCredentialsSubmit()
+  else if (step.value === 'otp') handleVerifyOtp()
+  else if (step.value === 'forgot-password') handleForgotPasswordReset()
+}
+
 const handleCredentialsSubmit = async () => {
   if (isSubmitting.value) return
   isSubmitting.value = true
   statusMessage.value = ''
-
-  if (DEBUG_MODE.value) {
-    statusType.value = 'success'
-    statusMessage.value = '⚠️ [DEBUG MODE] Перевожу на OTP...'
-    setTimeout(() => {
-      step.value = 'otp'
-      statusMessage.value = ''
-      isSubmitting.value = false
-    }, 500)
-    return
-  }
 
   try {
     let response
@@ -281,19 +280,26 @@ const handleCredentialsSubmit = async () => {
       response = await apiClient.register(username.value, email.value, password.value)
     }
 
-    if (response.token) {
-      apiClient.setToken(response.token)
-      loginSuccess(username.value)
-    } else if (response.temp_token) {
-      apiClient.setTempToken(response.temp_token)
+    console.log('[AUTH] response:', JSON.stringify(response))
+
+    if (response.user_id) {
+      console.log('[AUTH] login success')
+      loginSuccess(username.value, response.user_id)
+    } else if (response.message && response.message.includes('Код отправлен')) {
+      console.log('[AUTH] code sent, transitioning to OTP')
+      localStorage.setItem('reg_in_progress', '1')
+      localStorage.setItem('reg_username', username.value)
       statusType.value = 'success'
       statusMessage.value = '📧 Код отправлен на email'
       setTimeout(() => {
         step.value = 'otp'
         statusMessage.value = ''
       }, 800)
+    } else {
+      console.log('[AUTH] unexpected response:', response)
     }
   } catch (err) {
+    console.log('[AUTH] error:', err.message)
     if (err.message?.includes('409') || err.message?.includes('already exists')) {
       statusType.value = 'error'
       statusMessage.value = '❌ Пользователь с таким именем или email уже существует'
@@ -319,16 +325,17 @@ const handleResendCode = async () => {
       response = await apiClient.register(username.value, email.value, password.value)
     }
 
-    if (response.token) {
-      apiClient.setToken(response.token)
-      loginSuccess(username.value)
-    } else if (response.temp_token) {
-      apiClient.setTempToken(response.temp_token)
+    console.log('[AUTH] resend response:', JSON.stringify(response))
+
+    if (response.user_id) {
+      loginSuccess(username.value, response.user_id)
+    } else if (response.message && response.message.includes('Код отправлен')) {
       statusType.value = 'success'
       statusMessage.value = '📧 Код отправлен повторно'
       setTimeout(() => { statusMessage.value = '' }, 3000)
     }
   } catch (err) {
+    console.log('[AUTH] resend error:', err.message)
     statusType.value = 'error'
     statusMessage.value = `❌ ${err.message || 'Ошибка отправки кода'}`
   } finally {
@@ -343,9 +350,8 @@ const handleVerifyOtp = async () => {
 
   try {
     const response = await apiClient.verify2FA(otpCode.value)
-    if (response.token) {
-      apiClient.setToken(response.token)
-      loginSuccess(username.value)
+    if (response.user_id) {
+      loginSuccess(username.value, response.user_id)
     }
   } catch (err) {
     statusType.value = 'error'
@@ -371,16 +377,25 @@ const switchToForgotPassword = () => {
   handleForgotPasswordSendCode()
 }
 
+onMounted(() => {
+  if (localStorage.getItem('reg_in_progress') === '1') {
+    step.value = 'otp'
+    username.value = localStorage.getItem('reg_username') || ''
+    statusMessage.value = '📧 Введите код из письма'
+    statusType.value = 'success'
+  }
+})
+
 const handleForgotPasswordSendCode = async () => {
   if (isSubmitting.value) return
   isSubmitting.value = true
   statusMessage.value = ''
   try {
-    const data = await apiClient.sendForgotPasswordCode(username.value.trim())
-    forgotEmailMask.value = data.email
+    await apiClient.sendForgotPasswordCode(username.value.trim())
+    forgotEmailMask.value = ''
     step.value = 'forgot-password'
     statusType.value = 'success'
-    statusMessage.value = 'Код отправлен на ' + data.email
+    statusMessage.value = 'Если пользователь с таким именем существует и email подтверждён, код отправлен на почту'
   } catch (err) {
     statusType.value = 'error'
     statusMessage.value = `❌ ${err.message || 'Ошибка отправки кода'}`

@@ -1,234 +1,85 @@
-// API Client для общения с бекендом
-const API_BASE_URL = import.meta.env.DEV 
-  ? 'http://localhost:8080' 
-  : (import.meta.env.VITE_API_URL || '/api')
+const API_BASE = '/api'
 
-class ApiClient {
+export class ApiClient {
   constructor() {
-    // ИСПРАВЛЕНО: Ключ изменен на 'token'
-    this.token = localStorage.getItem('token')
-    this.tempToken = sessionStorage.getItem('temp_token')
+    this.baseUrl = API_BASE
   }
 
-  setToken(token) {
-    this.token = token
-    // ИСПРАВЛЕНО: Ключ изменен на 'token'
-    localStorage.setItem('token', token)
-  }
-
-  setTempToken(tempToken) {
-    this.tempToken = tempToken
-    if (tempToken) {
-      sessionStorage.setItem('temp_token', tempToken)
-    } else {
-      sessionStorage.removeItem('temp_token')
-    }
-  }
-
-  getToken() {
-    return this.token
-  }
-
-  clearToken() {
-    this.token = null
-    this.tempToken = null
-    // ИСПРАВЛЕНО: Ключ изменен на 'token'
-    localStorage.removeItem('token')
-  }
-
-  async request(endpoint, options = {}) {
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
-    const url = `${API_BASE_URL}${cleanEndpoint}`
-    
+  async request(path, options = {}) {
+    const token = localStorage.getItem('token')
     const headers = {
       'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     }
-
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      ...options,
+      headers,
+    })
+    if (response.status === 204) {
+      return null
     }
-
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      })
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        throw new Error(error.error || error.message || 'Ошибка сервера')
-      }
-
-      return await response.json()
-    } catch (error) {
-      console.error(`API Request Error: ${endpoint}`, error)
-      
-      if (error instanceof TypeError || error.message?.includes('fetch')) {
-        throw new Error('Не удалось связаться с игровым сервером. Проверьте интернет-соединение или подождите завершения технических работ.')
-      }
-      
-      throw error
+    const data = await response.json()
+    if (!response.ok) {
+      throw new Error(data.error || data.message || `HTTP ${response.status}`)
     }
+    return data
   }
 
-  // Auth endpoints
+  async register(username, password, email) {
+    return await this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, email }),
+    })
+  }
+
   async login(username, password) {
-    const response = await this.request('/auth/login', {
+    return await this.request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ username, password }),
     })
-    if (response.token) {
-      this.setToken(response.token)
-    }
-    if (response.temp_token) {
-      this.setTempToken(response.temp_token)
-    }
-    return response
   }
 
-  async verify2FA(code) {
-    const response = await this.request('/auth/2fa/authenticate', {
+  async setup2FA() {
+    return await this.request('/auth/2fa/setup', { method: 'POST' })
+  }
+
+  async verify2FASetup(code) {
+    return await this.request('/auth/2fa/verify', {
       method: 'POST',
-      body: JSON.stringify({ temp_token: this.tempToken, code }),
+      body: JSON.stringify({ code }),
     })
-    if (response.token) {
-      this.setToken(response.token)
-      this.setTempToken(null)
-    }
-    return response
   }
 
-  async register(username, email, password) {
-    const response = await this.request('/auth/register', {
+  async authenticate2FA(tempToken, code) {
+    return await this.request('/auth/2fa/authenticate', {
       method: 'POST',
-      body: JSON.stringify({ username, email, password }),
-    })
-    if (response.token) {
-      this.setToken(response.token)
-    }
-    if (response.temp_token) {
-      this.setTempToken(response.temp_token)
-    }
-    return response
-  }
-
-  // Game endpoints
-  async getActiveGame() {
-    return await this.request('/games/active', {
-      method: 'GET',
+      body: JSON.stringify({ temp_token: tempToken, code }),
     })
   }
 
-  async createLobby(options) {
-    return await this.request('/lobbies', {
+  async disable2FA(password) {
+    return await this.request('/auth/2fa/disable', {
       method: 'POST',
-      body: JSON.stringify(options),
+      body: JSON.stringify({ password }),
     })
   }
 
-  async getLobbies() {
-    return await this.request('/lobbies', {
-      method: 'GET',
-    })
-  }
-
-  async joinLobby(lobbyId) {
-    return await this.request(`/lobbies/${lobbyId}/join`, {
-      method: 'POST',
-    })
-  }
-
-  async leaveLobby(lobbyId) {
-    return await this.request(`/lobbies/${lobbyId}/leave`, {
-      method: 'POST',
-    })
-  }
-
-  // ИСПРАВЛЕНО: Путь изменен на /matchmaking/quick
-  async startMatchmaking() {
-    return await this.request('/matchmaking/quick', {
-      method: 'POST',
-    })
-  }
-
-  async getMatchmakingStatus() {
-    return await this.request('/matchmaking/status', {
-      method: 'GET',
-    })
-  }
-
-  // ИСПРАВЛЕНО: Теперь принимает gameId, метод изменен на POST, путь на /games/{gameId}/ships
-  async placeShips(gameId, ships) {
-    if (!gameId) {
-      throw new Error("Невозможно отправить корабли: отсутствует gameId")
-    }
-    return await this.request(`/games/${gameId}/ships`, {
-      method: 'POST',
-      body: JSON.stringify({ ships }),
-    })
-  }
-
-  async confirmShips() {
-    return await this.request('/game/ships/confirm', {
-      method: 'POST',
-    })
-  }
-
-  async randomShips() {
-    return await this.request('/game/ships/random', {
-      method: 'POST',
-    })
-  }
-
-  async makeMove(x, y) {
-    return await this.request('/game/move', {
-      method: 'POST',
-      body: JSON.stringify({ x, y }),
-    })
-  }
-
-  async getGameResult() {
-    return await this.request('/game/result', {
-      method: 'GET',
-    })
-  }
-
-  async getGameHistory() {
-    return await this.request('/game/history', {
-      method: 'GET',
-    })
-  }
-
-  async forfeitGame(gameId) {
-    return await this.request(`/games/${gameId}/forfeit`, {
-      method: 'POST',
-    })
-  }
-
-  async rematchGame(gameId) {
-    return await this.request(`/games/${gameId}/rematch`, {
-      method: 'POST',
-    })
-  }
-
-  // Profile endpoints
   async getProfile() {
+    return await this.request('/profile', { method: 'GET' })
+  }
+
+  async updateProfile(username) {
     return await this.request('/profile', {
-      method: 'GET',
+      method: 'PATCH',
+      body: JSON.stringify({ username }),
     })
   }
 
-  async updatePassword(oldPassword, newPassword) {
+  async changePassword(oldPassword, newPassword) {
     return await this.request('/profile/password', {
       method: 'PUT',
       body: JSON.stringify({ old_password: oldPassword, new_password: newPassword }),
-    })
-  }
-
-  async sendChangePasswordCode() {
-    return await this.request('/auth/password/change/send-code', {
-      method: 'POST',
     })
   }
 
@@ -246,36 +97,131 @@ class ApiClient {
     })
   }
 
+  async getActiveGame() {
+    return await this.request('/games/active', { method: 'GET' })
+  }
+
+  async getLobbies() {
+    return await this.request('/lobbies', { method: 'GET' })
+  }
+
+  async createLobby(options) {
+    return await this.request('/lobbies', {
+      method: 'POST',
+      body: JSON.stringify(options),
+    })
+  }
+
+  async joinLobby(lobbyId) {
+    return await this.request(`/lobbies/${lobbyId}/join`, { method: 'POST' })
+  }
+
+  async leaveLobby(lobbyId) {
+    return await this.request(`/lobbies/${lobbyId}/leave`, { method: 'POST' })
+  }
+
+  async startMatchmaking() {
+    return await this.request('/matchmaking/quick', { method: 'POST' })
+  }
+
+  async getMatchmakingStatus() {
+    return await this.request('/matchmaking/status', { method: 'GET' })
+  }
+
+  async leaveMatchmaking() {
+    return await this.request('/matchmaking/quick', { method: 'DELETE' })
+  }
+
+  async placeShips(gameId, ships) {
+    if (!gameId) throw new Error("Невозможно отправить корабли: отсутствует gameId")
+    return await this.request(`/games/${gameId}/ships`, {
+      method: 'POST',
+      body: JSON.stringify({ ships }),
+    })
+  }
+
+  async shipsReset(gameId) {
+    return await this.request(`/games/${gameId}/ships/reset`, { method: 'POST' })
+  }
+
+  async shipsConfirm(gameId) {
+    return await this.request(`/games/${gameId}/ships/confirm`, { method: 'POST' })
+  }
+
+  async shipsRandom(gameId) {
+    return await this.request(`/games/${gameId}/ships/random`, { method: 'POST' })
+  }
+
+  async makeMove(gameId, x, y) {
+    return await this.request(`/games/${gameId}/move`, {
+      method: 'POST',
+      body: JSON.stringify({ x, y }),
+    })
+  }
+
+  async forfeitGame(gameId) {
+    return await this.request(`/games/${gameId}/forfeit`, { method: 'POST' })
+  }
+
+  async rematchGame(gameId) {
+    return await this.request(`/games/${gameId}/rematch`, { method: 'POST' })
+  }
+
   async getLeaderboard(limit = 15) {
-    return await this.request(`/leaderboard?limit=${limit}`, {
-      method: 'GET',
-    })
+    return await this.request(`/leaderboard?limit=${limit}`, { method: 'GET' })
   }
 
-  async updateProfile(username) {
-    return await this.request('/profile', {
-      method: 'PATCH',
-      body: JSON.stringify({ username }),
-    })
+  async getShop() {
+    return await this.request('/shop', { method: 'GET' })
   }
 
-  async setup2FA() {
-    return await this.request('/auth/2fa/setup', {
+  async buyFish(fishId) {
+    return await this.request('/buy_fish', {
       method: 'POST',
+      body: JSON.stringify({ fishId }),
     })
   }
 
-  async verify2FASetup(code) {
-    return await this.request('/auth/2fa/verify', {
+  async getInventory() {
+    return await this.request('/inventory', { method: 'GET' })
+  }
+
+  async toggleFish(fishId, active) {
+    return await this.request('/inventory/toggle', {
       method: 'POST',
-      body: JSON.stringify({ code }),
+      body: JSON.stringify({ fishId, active }),
     })
   }
 
-  async disable2FA() {
-    return await this.request('/auth/2fa/disable', {
+  async getMatchHistory(page = 1, limit = 20) {
+    return await this.request(`/games/history?page=${page}&limit=${limit}`, { method: 'GET' })
+  }
+
+  async getAchievements() {
+    return await this.request('/achievements', { method: 'GET' })
+  }
+
+  async claimAchievement(achievementId) {
+    return await this.request('/achievements/claim', {
       method: 'POST',
+      body: JSON.stringify({ achievement_id: achievementId }),
     })
+  }
+
+  async checkAuth() {
+    try {
+      return await this.request('/auth/me', { method: 'GET' })
+    } catch {
+      return null
+    }
+  }
+
+  async logout() {
+    return await this.request('/auth/logout', { method: 'POST' })
+  }
+
+  async refreshWsToken() {
+    return await this.request('/auth/refresh', { method: 'POST' })
   }
 }
 
